@@ -1,9 +1,6 @@
 dependencies:
   idf: ">=5.4"
 
-  bsp_extra:
-    path: ../components/bsp_extra
-
   espressif/esp_audio_codec:
     version: "^2.3.0"
     public: true
