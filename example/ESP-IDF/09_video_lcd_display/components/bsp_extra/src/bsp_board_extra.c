@@ -16,7 +16,6 @@
 #include "driver/i2c.h"
 #include "driver/i2s_std.h"
 #include "driver/gpio.h"
-#include "driver/ledc.h"
 
 #include "bsp/esp-bsp.h"
 #include "bsp_board_extra.h"
