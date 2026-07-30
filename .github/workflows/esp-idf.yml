@@ -1,0 +1,129 @@
+name: ESP-IDF Examples
+
+on:
+  pull_request:
+    paths:
+      - "example/ESP-IDF/**"
+      - "!example/ESP-IDF/11_esp_brookesia_phone/components/brookesia_core/test_apps/**"
+      - "!example/ESP-IDF/**/*.md"
+      - "scripts/ci/discover_esp_idf.py"
+      - "scripts/ci/package_esp_idf.py"
+      - ".github/workflows/esp-idf.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "example/ESP-IDF/**"
+      - "!example/ESP-IDF/11_esp_brookesia_phone/components/brookesia_core/test_apps/**"
+      - "!example/ESP-IDF/**/*.md"
+      - "scripts/ci/discover_esp_idf.py"
+      - "scripts/ci/package_esp_idf.py"
+      - ".github/workflows/esp-idf.yml"
+  workflow_dispatch:
+    inputs:
+      example:
+        description: "all, an example directory name, or a repository-relative path"
+        required: false
+        default: all
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: esp-idf-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.example || 'all' }}
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    name: Discover ESP-IDF examples
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      examples: ${{ steps.projects.outputs.examples }}
+      count: ${{ steps.projects.outputs.count }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Select first-party projects
+        id: projects
+        env:
+          EXAMPLE_SELECTOR: ${{ inputs.example || 'all' }}
+        run: >-
+          python3 scripts/ci/discover_esp_idf.py "$EXAMPLE_SELECTOR"
+          --github-output "$GITHUB_OUTPUT"
+
+  build:
+    name: ${{ matrix.example.name }} / ESP-IDF ${{ matrix.idf }}
+    needs: discover
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        idf:
+          - v5.5.5
+          - v6.0.2
+        example: ${{ fromJSON(needs.discover.outputs.examples) }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Restore component and compiler caches
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            .ci-cache/component-manager/${{ matrix.idf }}/${{ matrix.example.name }}
+            .ci-cache/ccache/${{ matrix.idf }}/${{ matrix.example.name }}
+          key: >-
+            esp-idf-${{ runner.os }}-${{ matrix.idf }}-esp32p4-${{ matrix.example.name }}-${{ hashFiles(format('{0}/**/idf_component.yml', matrix.example.path), '!example/ESP-IDF/11_esp_brookesia_phone/components/brookesia_core/test_apps/**') }}
+      - name: Build for ESP32-P4
+        uses: espressif/esp-idf-ci-action@9d38657f3d789ca759b2b37aaf5ceffbc42c4f0d # v1
+        with:
+          esp_idf_version: ${{ matrix.idf }}
+          target: esp32p4
+          path: ${{ matrix.example.path }}
+          extra_docker_args: >-
+            -e IDF_COMPONENT_CACHE_PATH=/app/${{ github.repository }}/.ci-cache/component-manager/${{ matrix.idf }}/${{ matrix.example.name }}
+            -e IDF_CCACHE_ENABLE=1
+            -e CCACHE_DIR=/app/${{ github.repository }}/.ci-cache/ccache/${{ matrix.idf }}/${{ matrix.example.name }}
+            -e CCACHE_MAXSIZE=200M
+            -e CCACHE_COMPRESS=1
+          command: idf.py --version && idf.py set-target esp32p4 && idf.py build
+      - name: Package flashable firmware
+        run: >-
+          python3 scripts/ci/package_esp_idf.py
+          --project "${{ matrix.example.path }}"
+          --idf-version "${{ matrix.idf }}"
+          --target esp32p4
+      - name: Upload flashable firmware
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: esp-idf-${{ matrix.idf }}-${{ matrix.example.name }}-esp32p4-${{ github.sha }}
+          path: ci-artifacts/${{ matrix.idf }}-${{ matrix.example.name }}
+          if-no-files-found: error
+          retention-days: 14
+
+  result:
+    name: ESP-IDF build matrix
+    if: always()
+    needs:
+      - discover
+      - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify matrix result
+        env:
+          DISCOVERY_RESULT: ${{ needs.discover.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: |
+          if [[ "$DISCOVERY_RESULT" != "success" || "$BUILD_RESULT" != "success" ]]; then
+            echo "ESP-IDF discovery or build matrix failed."
+            exit 1
+          fi
+          echo "All selected ESP-IDF examples built successfully."

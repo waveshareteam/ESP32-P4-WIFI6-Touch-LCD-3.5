@@ -2,6 +2,7 @@
   <h1>ESP32-P4-WIFI6-Touch-LCD-3.5</h1>
   <p><strong>ESP32-P4 3.5 英寸 320 × 480 SPI LCD 智能视觉开发板</strong></p>
   <p>
+    <a href="https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-3.5/actions/workflows/esp-idf.yml"><img alt="ESP-IDF 示例构建" src="https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-3.5/actions/workflows/esp-idf.yml/badge.svg"></a>
     <a href="https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-3.5/actions/workflows/docs.yml"><img alt="文档检查" src="https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-3.5/actions/workflows/docs.yml/badge.svg"></a>
     <a href="LICENSE"><img alt="许可证" src="https://img.shields.io/github/license/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-3.5"></a>
   </p>
@@ -75,6 +76,18 @@ Wi-Fi 示例通过 ESP32-C6 协处理器通信。调整相关依赖时，请保�
 
 本仓库目前不包含 Arduino 示例。
 
+## ✅ 持续集成
+
+[ESP-IDF 示例工作流](.github/workflows/esp-idf.yml)会动态发现
+`example/ESP-IDF/` 下的所有直接子工程。遇到影响构建的修改时，每个工程都会针对
+`esp32p4` 使用 ESP-IDF v5.5.5 和 v6.0.2 编译。
+
+仅修改 README 时只运行轻量的文档检查，不会启动固件构建矩阵。
+
+每个成功的矩阵任务都会根据该工程的 `flasher_args.json` 上传可刷写制品，仓库
+`firmware/` 下已有的预编译镜像不会混入 CI 产物。项目选择、版本更新、制品内容和
+验证边界详见 [CI 说明](docs/ci.md)。
+
 ## 📦 固件
 
 [`firmware/ESP32-P4-WiFi6-LCD-3in5.bin`](firmware/ESP32-P4-WiFi6-LCD-3in5.bin)
@@ -91,8 +104,9 @@ Wi-Fi 示例通过 ESP32-C6 协处理器通信。调整相关依赖时，请保�
 | [`firmware/`](firmware/) | 预编译固件镜像 |
 | [`schematic/`](schematic/) | 产品原理图 |
 | [`assets/`](assets/) | 文档使用的产品图片 |
-| [`.github/workflows/`](.github/workflows/) | 文档持续集成 |
-| [`scripts/`](scripts/) | 文档验证辅助脚本 |
+| [`docs/`](docs/) | CI 与固件维护说明 |
+| [`.github/workflows/`](.github/workflows/) | ESP-IDF 构建与文档检查 |
+| [`scripts/`](scripts/) | CI 发现、制品打包与文档验证辅助脚本 |
 
 ## 📚 文档与支持
 

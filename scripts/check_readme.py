@@ -11,6 +11,7 @@ from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 README_FILES = (ROOT / "README.md", ROOT / "README_ZH.md")
+SUPPORTING_DOCS = (ROOT / "docs" / "ci.md",)
 PRODUCT_IMAGE = ROOT / "assets" / "ESP32-P4-WIFI6-Touch-LCD-3.5-details-1.jpg"
 EXAMPLE_ROOT = ROOT / "example" / "ESP-IDF"
 EXAMPLE_NAMES = (
@@ -135,6 +136,28 @@ def check_readme(readme: Path, errors: list[str]) -> None:
     check_local_links(readme, text, errors)
 
 
+def check_supporting_document(document: Path, errors: list[str]) -> None:
+    try:
+        raw = document.read_bytes()
+        text = raw.decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        add_error(errors, f"{document.relative_to(ROOT)}: cannot read as UTF-8: {exc}")
+        return
+
+    display_name = document.relative_to(ROOT).as_posix()
+    if not raw.endswith(b"\n"):
+        add_error(errors, f"{display_name}: file must end with a newline")
+
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        if line.endswith((" ", "\t")):
+            add_error(errors, f"{display_name}:{line_number}: trailing whitespace")
+
+    if LOCAL_PATH_RE.search(text):
+        add_error(errors, f"{display_name}: contains a host-local filesystem path")
+
+    check_local_links(document, text, errors)
+
+
 def check_product_image(errors: list[str]) -> None:
     try:
         image = PRODUCT_IMAGE.read_bytes()
@@ -153,6 +176,8 @@ def main() -> int:
     check_example_inventory(errors)
     for readme in README_FILES:
         check_readme(readme, errors)
+    for document in SUPPORTING_DOCS:
+        check_supporting_document(document, errors)
     check_product_image(errors)
 
     if errors:
@@ -161,7 +186,7 @@ def main() -> int:
             print(f"- {error}")
         return 1
 
-    print("Documentation validation passed for README.md and README_ZH.md.")
+    print("Documentation validation passed for the bilingual README files and supporting docs.")
     return 0
 
 

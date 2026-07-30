@@ -12,3 +12,5 @@
 **/dependencies.lock
 **/sdkconfig
 **/sdkconfig.old
+/.ci-cache/
+/ci-artifacts/

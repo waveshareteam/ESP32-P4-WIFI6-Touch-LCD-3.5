@@ -2,6 +2,7 @@
   <h1>ESP32-P4-WIFI6-Touch-LCD-3.5</h1>
   <p><strong>ESP32-P4 3.5-inch 320 × 480 SPI LCD smart vision development board</strong></p>
   <p>
+    <a href="https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-3.5/actions/workflows/esp-idf.yml"><img alt="ESP-IDF Examples" src="https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-3.5/actions/workflows/esp-idf.yml/badge.svg"></a>
     <a href="https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-3.5/actions/workflows/docs.yml"><img alt="Documentation" src="https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-3.5/actions/workflows/docs.yml/badge.svg"></a>
     <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-3.5"></a>
   </p>
@@ -79,6 +80,20 @@ components and coprocessor firmware compatible when changing its dependencies.
 
 Arduino sketches are not currently included in this repository.
 
+## ✅ Continuous Integration
+
+The [ESP-IDF Examples workflow](.github/workflows/esp-idf.yml) dynamically
+discovers every direct project under `example/ESP-IDF/`. For build-impacting
+changes, each project is compiled for `esp32p4` with ESP-IDF v5.5.5 and v6.0.2.
+
+README-only changes run the lightweight Documentation workflow and do not start
+the firmware build matrix.
+
+Every successful matrix entry uploads a flashable artifact derived from that
+project's `flasher_args.json`. The checked-in prebuilt image under `firmware/`
+is intentionally excluded. See the [CI guide](docs/ci.md) for project selection,
+version updates, artifact contents, and validation boundaries.
+
 ## 📦 Firmware
 
 [`firmware/ESP32-P4-WiFi6-LCD-3in5.bin`](firmware/ESP32-P4-WiFi6-LCD-3in5.bin)
@@ -97,8 +112,9 @@ repository yet and may be added in a later update.
 | [`firmware/`](firmware/) | Prebuilt firmware image |
 | [`schematic/`](schematic/) | Product schematic |
 | [`assets/`](assets/) | Product images used by the documentation |
-| [`.github/workflows/`](.github/workflows/) | Documentation CI |
-| [`scripts/`](scripts/) | Documentation validation helper |
+| [`docs/`](docs/) | CI and firmware maintenance notes |
+| [`.github/workflows/`](.github/workflows/) | ESP-IDF builds and documentation validation |
+| [`scripts/`](scripts/) | CI discovery, artifact packaging, and documentation validation helpers |
 
 ## 📚 Documentation and Support
 
