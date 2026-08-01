@@ -1,5 +1,6 @@
 #include "fbs_loader.hpp"
 #include "esp_idf_version.h"
+#include "esp_heap_caps.h"
 
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(6, 0, 0)
 #include "psa/crypto.h"
@@ -269,9 +270,13 @@ FbsModel *create_fbs_model(const char *fbs_buf,
             ESP_LOGE(TAG, "Failed to open %s.", fbs_buf);
             return nullptr;
         }
-        fseek(f, offset + 4, SEEK_SET);
-        fread(&mode, 4, 1, f);
-        fread(&size, 4, 1, f);
+        if (fseek(f, offset + 4, SEEK_SET) != 0 ||
+            fread(&mode, sizeof(mode), 1, f) != 1 ||
+            fread(&size, sizeof(size), 1, f) != 1) {
+            ESP_LOGE(TAG, "Failed to read model header from %s.", fbs_buf);
+            fclose(f);
+            return nullptr;
+        }
         model_buf = (char *)dl::tool::malloc_aligned(16, size, MALLOC_CAP_DEFAULT);
         if (!model_buf) {
             ESP_LOGE(
@@ -280,17 +285,32 @@ FbsModel *create_fbs_model(const char *fbs_buf,
                 size / 1024.f,
                 heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM) / 1024.f,
                 heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024.f);
+            fclose(f);
             return nullptr;
         }
         if (format == FBS_FILE_FORMAT_EDL2 || format == FBS_FILE_FORMAT_PDL2) {
-            fseek(f, 4, SEEK_CUR);
+            if (fseek(f, 4, SEEK_CUR) != 0) {
+                ESP_LOGE(TAG, "Failed to seek model data in %s.", fbs_buf);
+                heap_caps_free(model_buf);
+                fclose(f);
+                return nullptr;
+            }
         }
-        fread(model_buf, size, 1, f);
+        if (fread(model_buf, size, 1, f) != 1) {
+            ESP_LOGE(TAG, "Failed to read model data from %s.", fbs_buf);
+            heap_caps_free(model_buf);
+            fclose(f);
+            return nullptr;
+        }
+        fclose(f);
     }
 
     assert(mode == 0 || mode == 1);
     if (mode != 0 && key == NULL) {
         ESP_LOGE(TAG, "This is a cryptographic model, please enter the secret key!");
+        if (model_location == MODEL_LOCATION_IN_SDCARD) {
+            heap_caps_free(model_buf);
+        }
         return nullptr;
     }
 
@@ -380,12 +400,10 @@ FbsLoader::FbsLoader(const char *name, model_location_type_t location) :
 
 FbsLoader::~FbsLoader()
 {
-    if (m_location == MODEL_LOCATION_IN_FLASH_PARTITION) {
+    if (m_location == MODEL_LOCATION_IN_FLASH_PARTITION && this->m_mmap_handle) {
         esp_partition_munmap(*static_cast<esp_partition_mmap_handle_t *>(this->m_mmap_handle)); // support esp-idf v5
-        if (this->m_mmap_handle) {
-            free(this->m_mmap_handle);
-            this->m_mmap_handle = nullptr;
-        }
+        free(this->m_mmap_handle);
+        this->m_mmap_handle = nullptr;
     }
 }
 

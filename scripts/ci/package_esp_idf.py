@@ -96,8 +96,16 @@ def normalize_flash_files(
     return sorted(normalized, key=lambda item: int(item[0], 0))
 
 
+def esptool_write_flash_operation(idf_version: str) -> str:
+    """Return the operation spelling supported by the esptool bundled with IDF."""
+    match = re.match(r"^v?(\d+)(?:\.|$)", idf_version)
+    if match and int(match.group(1)) >= 6:
+        return "write-flash"
+    return "write_flash"
+
+
 def build_flash_command(
-    flasher_args: dict[str, Any], target: str, baud: int
+    flasher_args: dict[str, Any], target: str, baud: int, idf_version: str
 ) -> list[str]:
     command = ["python", "-m", "esptool", "--chip", target, "--baud", str(baud)]
     extra_args = flasher_args.get("extra_esptool_args", {})
@@ -111,7 +119,7 @@ def build_flash_command(
     if extra_args.get("stub") is False:
         command.append("--no-stub")
 
-    command.append("write_flash")
+    command.append(esptool_write_flash_operation(idf_version))
     write_flash_args = flasher_args.get("write_flash_args", [])
     if not isinstance(write_flash_args, list):
         raise ValueError("write_flash_args must be a list")
@@ -217,7 +225,7 @@ def package(args: argparse.Namespace) -> Path:
 
     manifest_files: list[dict[str, Any]] = []
     relocations: dict[str, str] = {}
-    command = build_flash_command(flasher_args, args.target, args.baud)
+    command = build_flash_command(flasher_args, args.target, args.baud, idf_version)
     for offset, source, relative_source, raw_source in flash_files:
         destination_relative = Path("bin") / relative_source
         destination = artifact_dir / destination_relative
@@ -263,6 +271,7 @@ def package(args: argparse.Namespace) -> Path:
     (artifact_dir / "README.txt").write_text(
         "This archive was generated from a successful ESP-IDF CI build.\n"
         "Install esptool and connect the board before flashing.\n"
+        f"The flash helper uses the esptool command syntax for ESP-IDF {idf_version}.\n"
         "On POSIX systems run: sh flash.sh\n"
         "On Windows run: flash.bat\n"
         "Review manifest.json before flashing to confirm the project and target.\n",
