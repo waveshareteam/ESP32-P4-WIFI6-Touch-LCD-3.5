@@ -10,7 +10,7 @@ import sys
 from pathlib import Path, PurePosixPath
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-EXAMPLES_ROOT = REPOSITORY_ROOT / "example" / "ESP-IDF"
+EXAMPLES_ROOT = REPOSITORY_ROOT / "examples" / "esp-idf"
 SAFE_PROJECT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
@@ -29,7 +29,7 @@ def discover_projects() -> list[Path]:
             if project.is_symlink() or project.resolve().parent != examples_root
         ]
     except (OSError, RuntimeError) as exc:
-        raise ValueError(f"cannot inspect example/ESP-IDF: {exc}") from exc
+        raise ValueError(f"cannot inspect examples/esp-idf: {exc}") from exc
 
     if escaped_projects:
         rendered = ", ".join(repr(name) for name in escaped_projects)
@@ -72,7 +72,7 @@ def resolve_selector(selector: str, projects: list[Path]) -> list[Path]:
     try:
         within_examples = candidate.relative_to(examples_root)
     except ValueError as exc:
-        raise ValueError("selector must be inside example/ESP-IDF") from exc
+        raise ValueError("selector must be inside examples/esp-idf") from exc
 
     if not within_examples.parts:
         raise ValueError("selector must identify one example, not the examples root")

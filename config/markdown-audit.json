@@ -1,0 +1,43 @@
+{
+  "classification_rules": [
+    {
+      "category": "first_party_wrapper",
+      "patterns": [
+        "examples/esp-idf/*/components/esp32_p4_wifi6_touch_lcd_35/**"
+      ]
+    },
+    {
+      "category": "embedded_upstream",
+      "patterns": [
+        "examples/esp-idf/*/components/esp_extractor/**"
+      ]
+    }
+  ],
+  "exclude_patterns": [],
+  "pair_exempt_patterns": [
+    ".github/pull_request_template.md",
+    "examples/esp-idf/*/components/esp32_p4_wifi6_touch_lcd_35/README.md"
+  ],
+  "language_link_exempt_patterns": [
+    ".github/pull_request_template.md",
+    "examples/esp-idf/*/components/esp32_p4_wifi6_touch_lcd_35/README.md"
+  ],
+  "relative_link_ignore_patterns": [],
+  "docs_only_allowed_patterns": [],
+  "sensitive_allow_regexes": [],
+  "bilingual_pairs": [],
+  "bilingual_directory_mappings": [],
+  "homepage_h3_emoji_allow_patterns": [],
+  "homepage_pairs": [
+    {
+      "english": "README.md",
+      "chinese": "README_ZH.md",
+      "profile": "auto",
+      "required_components": [],
+      "required_quick_links": [],
+      "required_badges": [],
+      "required_h2_icons": [],
+      "h3_emoji_allow_patterns": []
+    }
+  ]
+}

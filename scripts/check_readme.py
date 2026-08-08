@@ -1,33 +1,47 @@
 #!/usr/bin/env python3
-"""Validate the repository's bilingual top-level documentation."""
+"""Validate first-party bilingual documentation and repository-local links."""
 
 from __future__ import annotations
 
 import html
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 README_FILES = (ROOT / "README.md", ROOT / "README_ZH.md")
-SUPPORTING_DOCS = (ROOT / "docs" / "ci.md",)
 PRODUCT_IMAGE = ROOT / "assets" / "ESP32-P4-WIFI6-Touch-LCD-3.5-details-1.jpg"
-EXAMPLE_ROOT = ROOT / "example" / "ESP-IDF"
-EXAMPLE_NAMES = (
-    "01_HowToCreateProject",
-    "02_HelloWorld",
-    "03_i2c_tools",
-    "04_wifistation",
-    "05_sdmmc",
-    "06_I2SCodec",
-    "07_Displaycolorbar",
-    "08_lvgl_demo_v9",
-    "09_video_lcd_display",
-    "10_mp4_player",
-    "11_esp_brookesia_phone",
-    "12_esp32-p4-eye",
+EXAMPLE_ROOT = ROOT / "examples" / "esp-idf"
+EXAMPLE_LINK_PREFIX = PurePosixPath("examples/esp-idf")
+SUPPORTING_DOCS = (
+    ROOT / "CONTRIBUTING.md",
+    ROOT / "CONTRIBUTING_ZH.md",
+    ROOT / "SUPPORT.md",
+    ROOT / "SUPPORT_ZH.md",
+    ROOT / "docs" / "ci.md",
+    ROOT / "docs" / "ci_ZH.md",
+    ROOT / "docs" / "components.md",
+    ROOT / "docs" / "components_ZH.md",
+    ROOT / "example" / "README.md",
+    ROOT / "example" / "README_ZH.md",
+    EXAMPLE_ROOT / "README.md",
+    EXAMPLE_ROOT / "README_ZH.md",
 )
+DOCUMENT_COUNTERPARTS = {
+    ROOT / "CONTRIBUTING.md": "CONTRIBUTING_ZH.md",
+    ROOT / "CONTRIBUTING_ZH.md": "CONTRIBUTING.md",
+    ROOT / "SUPPORT.md": "SUPPORT_ZH.md",
+    ROOT / "SUPPORT_ZH.md": "SUPPORT.md",
+    ROOT / "docs" / "ci.md": "ci_ZH.md",
+    ROOT / "docs" / "ci_ZH.md": "ci.md",
+    ROOT / "docs" / "components.md": "components_ZH.md",
+    ROOT / "docs" / "components_ZH.md": "components.md",
+    ROOT / "example" / "README.md": "README_ZH.md",
+    ROOT / "example" / "README_ZH.md": "README.md",
+    EXAMPLE_ROOT / "README.md": "README_ZH.md",
+    EXAMPLE_ROOT / "README_ZH.md": "README.md",
+}
 REQUIRED_EXTERNAL_LINKS = {
     "README.md": (
         "https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-3.5.htm",
@@ -57,7 +71,7 @@ def extract_links(text: str) -> set[str]:
     return links
 
 
-def check_example_inventory(errors: list[str]) -> None:
+def check_example_inventory(errors: list[str]) -> tuple[str, ...]:
     try:
         discovered = {
             path.name
@@ -66,13 +80,11 @@ def check_example_inventory(errors: list[str]) -> None:
         }
     except OSError as exc:
         add_error(errors, f"cannot inspect ESP-IDF examples: {exc}")
-        return
+        return ()
 
-    expected = set(EXAMPLE_NAMES)
-    for name in sorted(expected - discovered):
-        add_error(errors, f"documented ESP-IDF example is missing from the repository: {name}")
-    for name in sorted(discovered - expected):
-        add_error(errors, f"ESP-IDF example is missing from the bilingual README inventory: {name}")
+    if not discovered:
+        add_error(errors, "no first-party ESP-IDF examples were found")
+    return tuple(sorted(discovered))
 
 
 def check_local_links(readme: Path, text: str, errors: list[str]) -> None:
@@ -98,7 +110,20 @@ def check_local_links(readme: Path, text: str, errors: list[str]) -> None:
             add_error(errors, f"{readme.name}: missing local link target: {raw_link}")
 
 
-def check_readme(readme: Path, errors: list[str]) -> None:
+def documented_examples(text: str) -> set[str]:
+    documented: set[str] = set()
+    for raw_link in extract_links(text):
+        parsed = urlsplit(raw_link)
+        if parsed.scheme or raw_link.startswith(("#", "//")):
+            continue
+        relative = unquote(raw_link.split("#", 1)[0].split("?", 1)[0]).strip("/")
+        path = PurePosixPath(relative)
+        if len(path.parts) >= 3 and path.parts[:2] == EXAMPLE_LINK_PREFIX.parts:
+            documented.add(path.parts[2])
+    return documented
+
+
+def check_readme(readme: Path, example_names: tuple[str, ...], errors: list[str]) -> None:
     try:
         raw = readme.read_bytes()
         text = raw.decode("utf-8")
@@ -128,15 +153,21 @@ def check_readme(readme: Path, errors: list[str]) -> None:
     if image_path not in text:
         add_error(errors, f"{readme.name}: missing product image reference: {image_path}")
 
-    for example_name in EXAMPLE_NAMES:
-        example_path = f"example/ESP-IDF/{example_name}/"
+    for example_name in example_names:
+        example_path = f"{EXAMPLE_LINK_PREFIX.as_posix()}/{example_name}/"
         if example_path not in text:
             add_error(errors, f"{readme.name}: missing example link: {example_path}")
+
+    stale_examples = documented_examples(text) - set(example_names)
+    for example_name in sorted(stale_examples):
+        add_error(errors, f"{readme.name}: documents an unknown ESP-IDF example: {example_name}")
 
     check_local_links(readme, text, errors)
 
 
-def check_supporting_document(document: Path, errors: list[str]) -> None:
+def check_supporting_document(
+    document: Path, counterpart: str | None, errors: list[str]
+) -> None:
     try:
         raw = document.read_bytes()
         text = raw.decode("utf-8")
@@ -154,6 +185,9 @@ def check_supporting_document(document: Path, errors: list[str]) -> None:
 
     if LOCAL_PATH_RE.search(text):
         add_error(errors, f"{display_name}: contains a host-local filesystem path")
+
+    if counterpart is not None and counterpart not in text:
+        add_error(errors, f"{display_name}: missing language switch to {counterpart}")
 
     check_local_links(document, text, errors)
 
@@ -173,11 +207,31 @@ def check_product_image(errors: list[str]) -> None:
 
 def main() -> int:
     errors: list[str] = []
-    check_example_inventory(errors)
+    example_names = check_example_inventory(errors)
     for readme in README_FILES:
-        check_readme(readme, errors)
-    for document in SUPPORTING_DOCS:
-        check_supporting_document(document, errors)
+        check_readme(readme, example_names, errors)
+
+    supporting_docs = list(SUPPORTING_DOCS)
+    counterparts = dict(DOCUMENT_COUNTERPARTS)
+    for example_name in example_names:
+        example_root = EXAMPLE_ROOT / example_name
+        english = example_root / "README.md"
+        chinese = example_root / "README_ZH.md"
+        supporting_docs.extend((english, chinese))
+        counterparts[english] = "README_ZH.md"
+        counterparts[chinese] = "README.md"
+
+        bsp_readme = (
+            example_root
+            / "components"
+            / "esp32_p4_wifi6_touch_lcd_35"
+            / "README.md"
+        )
+        if bsp_readme.is_file():
+            supporting_docs.append(bsp_readme)
+
+    for document in supporting_docs:
+        check_supporting_document(document, counterparts.get(document), errors)
     check_product_image(errors)
 
     if errors:
@@ -186,7 +240,7 @@ def main() -> int:
             print(f"- {error}")
         return 1
 
-    print("Documentation validation passed for the bilingual README files and supporting docs.")
+    print("Documentation validation passed for first-party bilingual docs and local links.")
     return 0
 
 

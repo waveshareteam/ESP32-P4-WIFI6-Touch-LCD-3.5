@@ -2,23 +2,9 @@ name: ESP-IDF Examples
 
 on:
   pull_request:
-    paths:
-      - "example/ESP-IDF/**"
-      - "!example/ESP-IDF/11_esp_brookesia_phone/components/brookesia_core/test_apps/**"
-      - "!example/ESP-IDF/**/*.md"
-      - "scripts/ci/discover_esp_idf.py"
-      - "scripts/ci/package_esp_idf.py"
-      - ".github/workflows/esp-idf.yml"
   push:
     branches:
       - main
-    paths:
-      - "example/ESP-IDF/**"
-      - "!example/ESP-IDF/11_esp_brookesia_phone/components/brookesia_core/test_apps/**"
-      - "!example/ESP-IDF/**/*.md"
-      - "scripts/ci/discover_esp_idf.py"
-      - "scripts/ci/package_esp_idf.py"
-      - ".github/workflows/esp-idf.yml"
   workflow_dispatch:
     inputs:
       example:
@@ -31,33 +17,61 @@ permissions:
   contents: read
 
 concurrency:
-  group: esp-idf-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.example || 'all' }}
+  group: esp-idf-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.example || 'changes' }}
   cancel-in-progress: true
 
 jobs:
-  discover:
-    name: Discover ESP-IDF examples
+  classify:
+    name: Classify ESP-IDF impact
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      examples: ${{ steps.projects.outputs.examples }}
-      count: ${{ steps.projects.outputs.count }}
+      mode: ${{ steps.routing.outputs.mode }}
+      examples: ${{ steps.routing.outputs.examples }}
+      count: ${{ steps.routing.outputs.count }}
+      docs-only: ${{ steps.routing.outputs.docs_only }}
+      firmware-touched: ${{ steps.routing.outputs.firmware_touched }}
+      release-review-required: ${{ steps.routing.outputs.release_review_required }}
+      unknown-count: ${{ steps.routing.outputs.unknown_count }}
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          fetch-depth: 0
           persist-credentials: false
-      - name: Select first-party projects
-        id: projects
+      - name: Route changed files
+        id: routing
         env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          EVENT_NAME: ${{ github.event_name }}
           EXAMPLE_SELECTOR: ${{ inputs.example || 'all' }}
-        run: >-
-          python3 scripts/ci/discover_esp_idf.py "$EXAMPLE_SELECTOR"
-          --github-output "$GITHUB_OUTPUT"
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            python3 scripts/ci/classify_changes.py \
+              --selector "$EXAMPLE_SELECTOR" \
+              --github-output "$GITHUB_OUTPUT" \
+              --report ci-routing-report.json
+          else
+            python3 scripts/ci/classify_changes.py \
+              --base "$BASE_SHA" \
+              --head "$HEAD_SHA" \
+              --github-output "$GITHUB_OUTPUT" \
+              --report ci-routing-report.json
+          fi
+      - name: Run CI routing acceptance tests
+        run: python3 -m unittest discover -s scripts/ci/tests -p "test_*.py" -v
+      - name: Summarize routing
+        run: |
+          echo "### ESP-IDF routing" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat ci-routing-report.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
   build:
     name: ${{ matrix.example.name }} / ESP-IDF ${{ matrix.idf }}
-    needs: discover
+    if: ${{ needs.classify.outputs.count != '0' }}
+    needs: classify
     runs-on: ubuntu-latest
     timeout-minutes: 75
     strategy:
@@ -67,7 +81,7 @@ jobs:
         idf:
           - v5.5.5
           - v6.0.2
-        example: ${{ fromJSON(needs.discover.outputs.examples) }}
+        example: ${{ fromJSON(needs.classify.outputs.examples) }}
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -80,7 +94,7 @@ jobs:
             .ci-cache/component-manager/${{ matrix.idf }}/${{ matrix.example.name }}
             .ci-cache/ccache/${{ matrix.idf }}/${{ matrix.example.name }}
           key: >-
-            esp-idf-${{ runner.os }}-${{ matrix.idf }}-esp32p4-${{ matrix.example.name }}-${{ hashFiles(format('{0}/**/idf_component.yml', matrix.example.path), '!example/ESP-IDF/11_esp_brookesia_phone/components/brookesia_core/test_apps/**') }}
+            esp-idf-${{ runner.os }}-${{ matrix.idf }}-esp32p4-${{ matrix.example.name }}-${{ hashFiles(format('{0}/**/idf_component.yml', matrix.example.path), '!examples/esp-idf/11_esp_brookesia_phone/components/brookesia_core/test_apps/**') }}
       - name: Build for ESP32-P4
         uses: espressif/esp-idf-ci-action@9d38657f3d789ca759b2b37aaf5ceffbc42c4f0d # v1
         with:
@@ -112,18 +126,31 @@ jobs:
     name: ESP-IDF build matrix
     if: always()
     needs:
-      - discover
+      - classify
       - build
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Verify matrix result
+      - name: Verify routed matrix result
         env:
-          DISCOVERY_RESULT: ${{ needs.discover.result }}
           BUILD_RESULT: ${{ needs.build.result }}
+          CLASSIFY_RESULT: ${{ needs.classify.result }}
+          SELECTED_COUNT: ${{ needs.classify.outputs.count }}
         run: |
-          if [[ "$DISCOVERY_RESULT" != "success" || "$BUILD_RESULT" != "success" ]]; then
-            echo "ESP-IDF discovery or build matrix failed."
+          if [[ "$CLASSIFY_RESULT" != "success" ]]; then
+            echo "Change classification or its acceptance tests failed."
+            exit 1
+          fi
+          if [[ "$SELECTED_COUNT" == "0" ]]; then
+            if [[ "$BUILD_RESULT" != "skipped" ]]; then
+              echo "No examples were selected, but the build result was $BUILD_RESULT."
+              exit 1
+            fi
+            echo "No example build was required for this complete change set."
+            exit 0
+          fi
+          if [[ "$BUILD_RESULT" != "success" ]]; then
+            echo "One or more selected ESP-IDF matrix jobs failed."
             exit 1
           fi
           echo "All selected ESP-IDF examples built successfully."

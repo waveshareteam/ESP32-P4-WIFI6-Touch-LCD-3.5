@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Product documentation / 产品文档
+    url: https://docs.waveshare.com/ESP32-P4-WIFI6-Touch-LCD-3.5
+    about: Setup, wiring, and product information / 安装、接线与产品资料

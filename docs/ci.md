@@ -1,69 +1,113 @@
 # Continuous Integration
 
-This repository keeps documentation validation and firmware compilation as
-separate workflows so that each check has a clear purpose.
+[简体中文](ci_ZH.md)
+
+The repository separates documentation validation, change classification, and
+firmware compilation so every required check has a stable meaning.
 
 ## Workflow responsibilities
 
-- [`docs.yml`](../.github/workflows/docs.yml) validates the bilingual top-level
-  README files, local links, the product image, and the documented example
-  inventory.
-- [`esp-idf.yml`](../.github/workflows/esp-idf.yml) discovers and builds the
-  first-party ESP-IDF projects. README-only and governance-only changes do not
-  trigger firmware builds.
+- [`docs.yml`](../.github/workflows/docs.yml) validates the first-party
+  bilingual documentation, local links, product image, and example inventory.
+- [`esp-idf.yml`](../.github/workflows/esp-idf.yml) classifies the complete Git
+  change set, selects affected first-party projects, builds the selected matrix,
+  packages flashable artifacts, and reports one aggregate result.
 
-The ESP-IDF workflow runs for build-impacting, non-Markdown changes below
-`example/ESP-IDF/`, for changes to its discovery or packaging helpers, and for
-changes to the workflow itself. Nested component test apps are excluded because
-they are not first-party matrix projects. A push to `main` uses the same paths.
+Both workflows run on every pull request and on pushes to `main`. Path filtering
+is performed inside the repository by a versioned classifier, rather than only
+by GitHub's workflow trigger filters, so a required check is still reported for
+documentation-only changes.
 
-## Project discovery and version matrix
+## Change routing
 
-Only direct child directories of `example/ESP-IDF/` that contain a
-`CMakeLists.txt` file are first-party projects. Nested projects inside bundled
-components are intentionally excluded.
+[`classify_changes.py`](../scripts/ci/classify_changes.py) obtains a complete
+merge-base diff for pull requests and pushes. It refuses an empty, malformed, or
+unsafe scope rather than silently assuming that every project should build.
 
-Each selected project is built for `esp32p4` against two explicitly pinned
+| Change class | ESP-IDF route |
+| --- | --- |
+| Root, docs, governance, schematic, assets, or example Markdown | No example build |
+| Source/configuration inside one direct example | That example only |
+| Shared example source, root build input, workflow, or CI helper | All discovered examples |
+| Unknown non-document path | All examples and report the unknown path |
+| Bundled Brookesia `test_apps` | No product-example build |
+| Checked-in firmware/release delivery | No source build; flag delivery review |
+
+Renames route both the old and new paths. The old
+`example/ESP-IDF` spelling is recognized only so migrations and stale diffs are
+classified safely; the canonical project root is `examples/esp-idf`.
+
+Manual dispatch accepts `all`, one example directory name such as
+`04_wifistation`, or a repository-relative path inside an example. Absolute,
+missing, or repository-escaping selectors are rejected.
+
+The classifier has a synthetic acceptance suite covering documentation-only,
+single-project, shared, workflow, firmware, unknown, rename, invalid-scope, and
+manual-selector cases. Those tests run before the build matrix is created.
+
+## Discovery and build matrix
+
+Only direct child directories of `examples/esp-idf/` that contain a root
+`CMakeLists.txt` are first-party projects. Nested component examples are not
+matrix entries. Discovery currently yields 12 projects.
+
+Every selected project targets `esp32p4` and is compiled against these exact
 stable ESP-IDF tags:
 
-- the latest maintained patch in the ESP-IDF v5.5 line at the time the workflow
-  is updated;
-- the latest stable ESP-IDF v6 release.
+- `v5.5.5`
+- `v6.0.2`
 
-The exact tags are recorded in `esp-idf.yml`. Update them only after checking
-the official ESP-IDF releases and the migration guides required by the new
-version. The build matrix uses `fail-fast: false` so one compatibility failure
-does not hide results from the other projects.
+The matrix uses `fail-fast: false` and a bounded parallelism of six. Component
+Manager downloads and ccache data are isolated by runner OS, ESP-IDF version,
+target, project, and dependency-manifest hash.
 
-Component Manager downloads and ccache data are restored with a key scoped by
-runner OS, ESP-IDF version, target, project, and dependency-manifest hash. This
-keeps the two framework lines and 12 projects isolated while allowing repeated
-CI runs to reuse safe downloads and compiler outputs.
+Update a framework tag only after checking the official ESP-IDF release and all
+migration guides between the old and new versions. For the current matrix, the
+major-version transition is covered by the official
+[ESP-IDF 5.5 to 6.0 migration guide](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/migration-guides/release-6.x/6.0/index.html).
 
-A manual run accepts `all`, an example directory name such as
-`04_wifistation`, or a repository-relative path inside an example. Invalid,
-absolute, or repository-escaping paths are rejected before the matrix starts.
+## Aggregate result
+
+`ESP-IDF build matrix` is the stable final gate:
+
+- classification or routing-test failure fails the gate;
+- zero selected projects succeeds only when the build job is skipped;
+- one or more selected projects succeeds only when the entire generated matrix
+  succeeds.
+
+This job is the suitable branch-protection check. Individual matrix job names
+change as projects and framework versions change.
 
 ## Build artifacts
 
-Every successful matrix entry uploads a flashable artifact generated only from
-that project's `build/flasher_args.json`. Each artifact contains:
+Every successful matrix entry packages only files referenced by that project's
+`build/flasher_args.json`. Each artifact contains:
 
-- `manifest.json` with the project, target, ESP-IDF version, commit, offsets,
-  sizes, and SHA-256 hashes;
-- portable `flasher_args.json` and `flash_args` generated from ESP-IDF metadata;
-- the exact binaries referenced by the flasher metadata;
-- `flash.sh` and `flash.bat` helpers. Run `sh flash.sh` on POSIX systems or
-  `flash.bat` on Windows after connecting the board.
+- `manifest.json` with project, target, ESP-IDF version, commit, offsets, sizes,
+  and SHA-256 hashes;
+- portable `flasher_args.json` and `flash_args` metadata;
+- the exact bootloader, partition table, application, and other referenced
+  binaries;
+- `flash.sh` and `flash.bat` helpers.
 
-Artifacts are retained for 14 days. The checked-in image under `firmware/` is a
-prebuilt product image and is never collected or re-uploaded by source-build
-CI.
+Artifacts are retained for 14 days. Paths are validated to remain inside the
+selected project's build directory before packaging.
+
+## Immutable firmware boundary
+
+[`firmware/ESP32-P4-WiFi6-LCD-3in5.bin`](../firmware/ESP32-P4-WiFi6-LCD-3in5.bin)
+is a separately delivered factory image. Source CI never builds, copies, wraps,
+or re-uploads it. A change to a delivered `.bin` or `.zip` is classified for
+explicit release review and must include provenance, version, target hardware,
+flash instructions, and hardware-validation evidence supplied by the
+maintainer.
 
 ## Validation boundary
 
-A successful workflow proves that the selected source projects compile with
-the recorded framework versions. It does not replace hardware testing or prove
-that an ESP32-C6 coprocessor firmware image is runtime-compatible with every
-host component version. Display, touch, audio, camera, storage, power, and
-hosted-wireless behavior still require board-level validation.
+A successful Actions run proves only that the selected source projects compile
+and package with the recorded framework versions. It does not prove runtime
+compatibility of the ESP32-C6 coprocessor firmware, nor validate display, touch,
+camera, audio, storage, USB, power, or radio behavior. Those remain board-level
+acceptance tests. This repository intentionally uses post-commit Actions as its
+compile evidence; the maintenance workflow does not perform a local ESP-IDF
+build.
