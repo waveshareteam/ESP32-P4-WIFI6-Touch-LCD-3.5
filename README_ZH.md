@@ -10,10 +10,11 @@
     <a href="README.md">English</a> ·
     <a href="https://www.waveshare.net/shop/ESP32-P4-WIFI6-Touch-LCD-3.5.htm">🌐 产品页面</a> ·
     <a href="https://docs.waveshare.net/ESP32-P4-WIFI6-Touch-LCD-3.5/">📚 产品文档</a> ·
+    <a href="#-固件">📦 固件</a> ·
     <a href="examples/esp-idf/">🧩 ESP-IDF 示例</a> ·
     <a href="schematic/ESP32-P4-WIFI6-Touch-LCD-3.5-schematic.pdf">🧾 原理图</a>
   </p>
-  <img src="assets/ESP32-P4-WIFI6-Touch-LCD-3.5-details-1.jpg" alt="Waveshare ESP32-P4-WIFI6-Touch-LCD-3.5" width="600">
+  <img src="assets/ESP32-P4-WIFI6-Touch-LCD-3.5-details-1.jpg" alt="微雪 ESP32-P4-WIFI6-Touch-LCD-3.5 开发板正反面产品图" width="600">
 </div>
 
 ---
@@ -92,7 +93,7 @@ Wi-Fi 示例通过 ESP32-C6 协处理器通信。调整相关依赖时，请保�
 `firmware/` 下已有的预编译镜像不会混入 CI 产物。项目选择、版本更新、制品内容和
 必需检查行为和验证边界详见 [CI 说明](docs/ci_ZH.md)。
 
-## 📦 固件
+## 📦 固件 <a id="-固件"></a>
 
 [`firmware/ESP32-P4-WiFi6-LCD-3in5.bin`](firmware/ESP32-P4-WiFi6-LCD-3in5.bin)
 是仓库中保存的预编译固件镜像，并非 ESP-IDF 源码工程或 CI 构建产物。

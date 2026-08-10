@@ -46,6 +46,17 @@ class ClassifyChangesTests(unittest.TestCase):
         self.assertEqual(gitignore["esp_idf"]["mode"], "none")
         self.assertTrue(gitignore["scope"]["docs_only"])
 
+    def test_documentation_policy_configs_select_no_builds(self) -> None:
+        for changed_path in (
+            "config/markdown-audit.json",
+            "config/ci-routing.json",
+        ):
+            with self.subTest(changed_path=changed_path):
+                report = self.report(f"M\t{changed_path}")
+                self.assertEqual(report["esp_idf"]["mode"], "none")
+                self.assertEqual(self.selected_names(report), [])
+                self.assertTrue(report["scope"]["docs_only"])
+
     def test_direct_source_selects_only_affected_project(self) -> None:
         report = self.report(
             "M\texamples/esp-idf/09_video_lcd_display/main/app_video.c"

@@ -66,6 +66,11 @@ GLOBAL_BUILD_FILES = {
     "sdkconfig",
     "sdkconfig.defaults",
 }
+DOCUMENTATION_POLICY_FILES = {
+    "config/ci-routing.json",
+    "config/markdown-audit.json",
+    "scripts/check_readme.py",
+}
 GLOBAL_BUILD_PREFIXES = (
     PurePosixPath(".github/workflows"),
     PurePosixPath("components"),
@@ -285,6 +290,16 @@ def route_path(path_text: str, status: str, project_names: set[str]) -> Route:
             False,
         )
 
+    if path_text in DOCUMENTATION_POLICY_FILES:
+        return Route(
+            path_text,
+            status,
+            "documentation_validator",
+            "none",
+            "documentation policy validation does not change product examples",
+            True,
+        )
+
     if path_text in GLOBAL_BUILD_FILES or any(
         is_under(path, prefix) for prefix in GLOBAL_BUILD_PREFIXES
     ):
@@ -297,10 +312,7 @@ def route_path(path_text: str, status: str, project_names: set[str]) -> Route:
             False,
         )
 
-    if path_text in {"scripts/check_readme.py"} or path.parts[:2] == (
-        "scripts",
-        "tests",
-    ):
+    if path.parts[:2] == ("scripts", "tests"):
         return Route(
             path_text,
             status,

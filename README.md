@@ -10,10 +10,11 @@
     <a href="README_ZH.md">中文</a> ·
     <a href="https://www.waveshare.com/esp32-p4-wifi6-touch-lcd-3.5.htm">🌐 Product Page</a> ·
     <a href="https://docs.waveshare.com/ESP32-P4-WIFI6-Touch-LCD-3.5">📚 Documentation</a> ·
+    <a href="#-firmware">📦 Firmware</a> ·
     <a href="examples/esp-idf/">🧩 ESP-IDF Examples</a> ·
     <a href="schematic/ESP32-P4-WIFI6-Touch-LCD-3.5-schematic.pdf">🧾 Schematic</a>
   </p>
-  <img src="assets/ESP32-P4-WIFI6-Touch-LCD-3.5-details-1.jpg" alt="Waveshare ESP32-P4-WIFI6-Touch-LCD-3.5" width="600">
+  <img src="assets/ESP32-P4-WIFI6-Touch-LCD-3.5-details-1.jpg" alt="Front and rear views of the Waveshare ESP32-P4-WIFI6-Touch-LCD-3.5 development board" width="600">
 </div>
 
 ---
@@ -99,7 +100,7 @@ is intentionally excluded. See the [CI guide](docs/ci.md) for diff routing,
 project selection, version updates, artifact contents, required-check behavior,
 and validation boundaries.
 
-## 📦 Firmware
+## 📦 Firmware <a id="-firmware"></a>
 
 [`firmware/ESP32-P4-WiFi6-LCD-3in5.bin`](firmware/ESP32-P4-WiFi6-LCD-3in5.bin)
 is a checked-in prebuilt firmware image, not an ESP-IDF source project or a CI
