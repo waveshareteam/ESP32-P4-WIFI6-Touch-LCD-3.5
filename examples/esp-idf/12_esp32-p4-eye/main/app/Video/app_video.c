@@ -13,6 +13,12 @@
 #include <sys/mman.h>
 #include <sys/param.h>
 #include <sys/errno.h>
+
+#ifndef MAP_FAILED
+// ESP-IDF 5.5 newlib headers do not expose the POSIX mmap failure sentinel.
+#define MAP_FAILED ((void *)-1)
+#endif
+
 #include "esp_err.h"
 #include "esp_log.h"
 #include "linux/videodev2.h"

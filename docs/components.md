@@ -18,6 +18,7 @@ changing runtime behavior.
 | `esp_extractor` | Examples 10 and 11 | Keep embedded with its target-specific prebuilt library |
 | Detection model wrappers | Example 12 | Keep locally; consume `espressif/esp-dl ==3.1.3` through Component Manager |
 | `espressif/button` | Example 12 | Managed and pinned to `==4.2.0` |
+| `espressif/esp_lvgl_port` | Example 12 | Managed and pinned to `==2.8.0~1` for the ESP-IDF 5.5/6.0 CI matrix |
 
 The ESP-IDF Component Registry publishes
 [`waveshare/esp32_p4_wifi6_touch_lcd_3_5` v2.0.0](https://components.espressif.com/components/waveshare/esp32_p4_wifi6_touch_lcd_3_5/versions/2.0.0).
@@ -67,6 +68,9 @@ profile as review-sensitive. A component update must not silently rewrite them.
    `esp_h264`; the examples use different feature generations and must not be
    unified merely because a newer version exists.
 3. Update one dependency family at a time and record the reason in the manifest.
-4. Use the post-commit GitHub Actions matrix as compile evidence. A green build
+4. Keep Example 12 `espressif/esp_lvgl_port` at `==2.8.0~1` until the CI matrix
+   moves beyond ESP-IDF 6.0 or its DPI callback API migration is complete;
+   `2.9.0` requires the later callback API.
+5. Use the post-commit GitHub Actions matrix as compile evidence. A green build
    does not replace display, touch, camera, audio, storage, USB, or hosted-Wi-Fi
    validation on physical hardware.

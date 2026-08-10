@@ -16,6 +16,7 @@
 | `esp_extractor` | 示例 10、11 | 与其目标相关预编译库一起保留 |
 | 检测模型封装 | 示例 12 | 保留在本地，通过组件管理器使用 `espressif/esp-dl ==3.1.3` |
 | `espressif/button` | 示例 12 | 托管组件，固定为 `==4.2.0` |
+| `espressif/esp_lvgl_port` | 示例 12 | 托管组件，为 ESP-IDF 5.5/6.0 CI 矩阵固定为 `==2.8.0~1` |
 
 ESP-IDF 组件注册表已经发布
 [`waveshare/esp32_p4_wifi6_touch_lcd_3_5` v2.0.0](https://components.espressif.com/components/waveshare/esp32_p4_wifi6_touch_lcd_3_5/versions/2.0.0)。
@@ -56,5 +57,7 @@ ESP-IDF 组件注册表已经发布
 2. 保留 TinyUSB、`esp_video` 和 `esp_h264` 针对 ESP-IDF 5.5/6.0 的明确条件；
    不同示例使用了不同功能代际，不能只因为存在新版本就强行统一。
 3. 每次只更新一个依赖族，并在 manifest 中记录原因。
-4. 以提交后的 GitHub Actions 矩阵作为编译证据。构建通过不能替代显示、触摸、摄像头、
+4. 示例 12 的 `espressif/esp_lvgl_port` 保持 `==2.8.0~1`，直到 CI 矩阵跨过
+   ESP-IDF 6.0 或完成对应的 DPI callback API 迁移；`2.9.0` 依赖后续的 callback API。
+5. 以提交后的 GitHub Actions 矩阵作为编译证据。构建通过不能替代显示、触摸、摄像头、
    音频、存储、USB 或 hosted Wi-Fi 的实机验证。
