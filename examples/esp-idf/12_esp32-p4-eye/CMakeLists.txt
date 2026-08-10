@@ -61,8 +61,8 @@ endif()
 # Suppress warnings only for esp-dl component
 idf_component_get_property(esp_dl_lib espressif__esp-dl COMPONENT_LIB)
 if(esp_dl_lib)
-    target_compile_options(${esp_dl_lib} PRIVATE 
-        -Wno-unused-variable 
+    target_compile_options(${esp_dl_lib} PRIVATE
+        -Wno-unused-variable
         -Wno-unused-but-set-variable
     )
     if(IDF_VERSION_MAJOR GREATER_EQUAL 6)
