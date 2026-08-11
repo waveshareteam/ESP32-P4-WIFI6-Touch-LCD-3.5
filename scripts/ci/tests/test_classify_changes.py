@@ -79,6 +79,8 @@ class ClassifyChangesTests(unittest.TestCase):
         for changed_path in (
             "examples/esp-idf/common/compat.c",
             ".github/workflows/docs.yml",
+            "Flash-CI-Firmware.cmd",
+            "scripts/Flash-CI-Firmware.ps1",
             "scripts/ci/package_esp_idf.py",
         ):
             with self.subTest(changed_path=changed_path):

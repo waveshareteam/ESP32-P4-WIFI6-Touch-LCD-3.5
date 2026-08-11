@@ -11,5 +11,9 @@
   "arduino_shared_patterns": [],
   "esp_idf_global_patterns": [],
   "arduino_global_patterns": [],
-  "global_build_patterns": []
+  "global_build_patterns": [
+    "Flash-CI-Firmware.cmd",
+    "scripts/Flash-CI-Firmware.ps1",
+    "scripts/ci/*"
+  ]
 }

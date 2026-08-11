@@ -60,9 +60,11 @@ ROOT_DOCUMENT_NAMES = {
 GLOBAL_BUILD_FILES = {
     ".gitmodules",
     "CMakeLists.txt",
+    "Flash-CI-Firmware.cmd",
     "dependencies.lock",
     "idf_component.yml",
     "partitions.csv",
+    "scripts/Flash-CI-Firmware.ps1",
     "sdkconfig",
     "sdkconfig.defaults",
 }
