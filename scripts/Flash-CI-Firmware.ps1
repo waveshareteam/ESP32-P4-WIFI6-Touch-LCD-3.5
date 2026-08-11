@@ -41,7 +41,8 @@ foreach ($projectName in $ProjectNames) {
             Framework = $ExpectedFramework
             Version = $version
             SourceProject = "examples/esp-idf/$projectName"
-            Artifact = "esp-idf-$version-$projectName-esp32p4-<final-sha>"
+            Artifact = "esp-idf-$version-$projectName-esp32p4-<ci-build-sha>"
+            BuildSha = '<ci-build-sha>'
         }
         $itemIndex++
     }
@@ -119,7 +120,16 @@ function Get-FileSha256([string]$Path) {
     }
 }
 
-function Test-PackageManifest([string]$PackageDir, $Item, [string]$FinalSha) {
+function Get-ArtifactBuildSha([string]$ArtifactName, [string]$ExpectedPrefix) {
+    $pattern = '^' + [regex]::Escape($ExpectedPrefix) + '([0-9a-fA-F]{40})$'
+    $match = [regex]::Match($ArtifactName, $pattern)
+    if (-not $match.Success) {
+        throw "Artifact name does not match $ExpectedPrefix<ci-build-sha>."
+    }
+    return $match.Groups[1].Value.ToLowerInvariant()
+}
+
+function Test-PackageManifest([string]$PackageDir, $Item, [string]$ArtifactSha) {
     $manifestPath = Join-Path $PackageDir 'manifest.json'
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
         throw 'Package manifest.json is missing.'
@@ -131,9 +141,9 @@ function Test-PackageManifest([string]$PackageDir, $Item, [string]$FinalSha) {
         [string]$manifest.framework_version -ne $Item.Version -or
         [string]$manifest.target -ne $ExpectedTarget -or
         [string]$manifest.project_path -ne $Item.SourceProject -or
-        [string]$manifest.git_sha -ne $FinalSha
+        [string]$manifest.git_sha -ne $ArtifactSha
     ) {
-        throw 'Package manifest identity does not match the selected ESP32-P4 item and local HEAD.'
+        throw 'Package manifest identity does not match the selected ESP32-P4 CI artifact.'
     }
     if ([int64]$manifest.baud -ne $ExpectedBaud -or @($manifest.files).Count -lt 1) {
         throw 'Package manifest flash metadata is incomplete or unsafe.'
@@ -219,6 +229,16 @@ function Invoke-SelfTest {
     ) {
         throw 'SelfTest relative manifest path validation failed.'
     }
+    $syntheticBuildSha = 'fedcba9876543210fedcba9876543210fedcba98'
+    $syntheticPrefix = 'esp-idf-v5.5.5-example-esp32p4-'
+    if ((Get-ArtifactBuildSha ($syntheticPrefix + $syntheticBuildSha) $syntheticPrefix) -ne $syntheticBuildSha) {
+        throw 'SelfTest did not resolve the CI build SHA from an artifact name.'
+    }
+    $rejectedArtifactName = $false
+    try { [void](Get-ArtifactBuildSha ($syntheticPrefix + 'not-a-sha') $syntheticPrefix) } catch { $rejectedArtifactName = $true }
+    if (-not $rejectedArtifactName) {
+        throw 'SelfTest did not reject an artifact without a full CI build SHA.'
+    }
 
     $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('waveshare-flasher-' + [guid]::NewGuid().ToString('N'))
     try {
@@ -264,7 +284,7 @@ function Invoke-SelfTest {
             Remove-Item -LiteralPath $tempRoot -Recurse -Force
         }
     }
-    Write-Output 'SELF_TEST_OK items=24 transitions=23 completed=24 target=esp32p4 c6Rejected=true'
+    Write-Output 'SELF_TEST_OK items=24 transitions=23 completed=24 target=esp32p4 c6Rejected=true artifactShaBound=true'
 }
 
 if ($SelfTest) {
@@ -434,9 +454,25 @@ function Resolve-ArtifactRuns([string]$GhExe, [string]$FinalSha) {
         throw "No successful $Workflow run exists for local HEAD $FinalSha; refusing to use another artifact."
     }
     $run = [string]$runs[0].databaseId
+    $artifactRaw = (& $GhExe api "repos/$Repo/actions/runs/$run/artifacts?per_page=100" 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw "Unable to list artifacts for run ${run}: $artifactRaw" }
+    $artifactResponse = $artifactRaw | ConvertFrom-Json
+    $availableArtifacts = @($artifactResponse.artifacts | Where-Object { -not [bool]$_.expired })
     foreach ($item in $Items) {
-        $item.Artifact = "esp-idf-$($item.Version)-$($item.Name)-esp32p4-$FinalSha"
+        $prefix = "esp-idf-$($item.Version)-$($item.Name)-esp32p4-"
+        $namePattern = '^' + [regex]::Escape($prefix) + '([0-9a-fA-F]{40})$'
+        $matches = @($availableArtifacts | Where-Object { [string]$_.name -match $namePattern })
+        if ($matches.Count -ne 1) {
+            throw "Expected exactly one non-expired artifact matching $prefix<ci-build-sha> in run $run."
+        }
+        $artifactName = [string]$matches[0].name
+        $item.Artifact = $artifactName
+        $item.BuildSha = Get-ArtifactBuildSha $artifactName $prefix
         $item | Add-Member -NotePropertyName Run -NotePropertyValue $run -Force
+    }
+    $buildShas = @($Items.BuildSha | Sort-Object -Unique)
+    if ($buildShas.Count -ne 1) {
+        throw "Artifacts in run $run do not share one CI build SHA."
     }
 }
 
@@ -514,7 +550,7 @@ function Invoke-CurrentFlash(
     [string]$FinalSha
 ) {
     $paths = New-RunPaths
-    Add-RunLog $paths.LogPath "finalSHA=$FinalSha index=$($Item.Index) artifact=$($Item.Artifact) run=$($Item.Run) port=$SelectedPort"
+    Add-RunLog $paths.LogPath "finalSHA=$FinalSha buildSHA=$($Item.BuildSha) index=$($Item.Index) artifact=$($Item.Artifact) run=$($Item.Run) port=$SelectedPort"
     $downloadOutput = (& $GhExe run download $Item.Run --repo $Repo --name $Item.Artifact --dir $paths.DownloadDir 2>&1 | Out-String)
     $downloadExit = $LASTEXITCODE
     Add-RunLog $paths.LogPath $downloadOutput
@@ -522,7 +558,7 @@ function Invoke-CurrentFlash(
         throw "Artifact download failed with exit code $downloadExit. Log: $($paths.LogPath)"
     }
     $packageDir = Find-PackageDirectory $paths.DownloadDir
-    $plan = Test-PackageManifest $packageDir $Item $FinalSha
+    $plan = Test-PackageManifest $packageDir $Item $Item.BuildSha
     $flashArguments = @(
         '-m', 'esptool', '--port', $SelectedPort, '--chip', $ExpectedTarget,
         '--baud', [string]$ExpectedBaud, $WriteOperation
