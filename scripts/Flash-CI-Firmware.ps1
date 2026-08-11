@@ -68,13 +68,20 @@ function Get-NextProgress([int]$CurrentIndex, [int[]]$ConfirmedIndexes, [int]$It
     }
 }
 
-function Get-StateForFinalSha($Saved, [string]$ExpectedSha, [string]$DefaultPort) {
+function Get-StateForBuild(
+    $Saved,
+    [string]$ExpectedFinalSha,
+    [string]$ExpectedBuildSha,
+    [string]$DefaultPort
+) {
     if (
         -not $Saved -or
         -not $Saved.PSObject.Properties['FinalSha'] -or
+        -not $Saved.PSObject.Properties['BuildSha'] -or
         -not $Saved.PSObject.Properties['CurrentIndex'] -or
         -not $Saved.PSObject.Properties['ConfirmedIndexes'] -or
-        [string]$Saved.FinalSha -ne $ExpectedSha
+        [string]$Saved.FinalSha -ne $ExpectedFinalSha -or
+        [string]$Saved.BuildSha -ne $ExpectedBuildSha
     ) {
         return [pscustomobject]@{ CurrentIndex = $DefaultStartIndex; ConfirmedIndexes = @(); Port = $DefaultPort }
     }
@@ -213,14 +220,25 @@ function Invoke-SelfTest {
     if (-not $last.Completed -or @($last.ConfirmedIndexes).Count -ne $Items.Count) {
         throw 'SelfTest did not complete every item.'
     }
-    $reset = Get-StateForFinalSha ([pscustomobject]@{
+    $reset = Get-StateForBuild ([pscustomobject]@{
         FinalSha = 'different'
+        BuildSha = 'expected-build'
         CurrentIndex = 4
         ConfirmedIndexes = @(1, 2, 3)
         Port = 'ignored'
-    }) 'expected' ''
+    }) 'expected' 'expected-build' ''
     if ($reset.CurrentIndex -ne 1 -or @($reset.ConfirmedIndexes).Count -ne 0) {
         throw 'SelfTest did not reset state for a new SHA.'
+    }
+    $buildReset = Get-StateForBuild ([pscustomobject]@{
+        FinalSha = 'expected'
+        BuildSha = 'different-build'
+        CurrentIndex = 4
+        ConfirmedIndexes = @(1, 2, 3)
+        Port = 'ignored'
+    }) 'expected' 'expected-build' ''
+    if ($buildReset.CurrentIndex -ne 1 -or @($buildReset.ConfirmedIndexes).Count -ne 0) {
+        throw 'SelfTest did not reset state for a new CI build SHA.'
     }
     if (
         (Test-RelativePackagePath 'C:\package' '..\escape.bin') -or
@@ -443,17 +461,21 @@ function Assert-ReadyPullRequest([string]$GhExe, [string]$Branch, [string]$Final
 }
 
 function Resolve-ArtifactRuns([string]$GhExe, [string]$FinalSha) {
-    $raw = (& $GhExe run list --repo $Repo --workflow $Workflow --commit $FinalSha --status success --limit 20 --json databaseId,headSha,createdAt 2>&1 | Out-String)
-    if ($LASTEXITCODE -ne 0) { throw "Unable to list successful $Workflow runs: $raw" }
+    $raw = (& $GhExe run list --repo $Repo --workflow $Workflow --commit $FinalSha --limit 20 --json databaseId,headSha,createdAt,status,conclusion 2>&1 | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw "Unable to list $Workflow runs: $raw" }
     $runs = @(
         $raw | ConvertFrom-Json |
             Where-Object { [string]$_.headSha -eq $FinalSha } |
             Sort-Object createdAt -Descending
     )
     if ($runs.Count -lt 1) {
-        throw "No successful $Workflow run exists for local HEAD $FinalSha; refusing to use another artifact."
+        throw "No $Workflow run exists for local HEAD $FinalSha; refusing to use another artifact."
     }
-    $run = [string]$runs[0].databaseId
+    $latestRun = $runs[0]
+    if ([string]$latestRun.status -ine 'completed' -or [string]$latestRun.conclusion -ine 'success') {
+        throw "The latest $Workflow run for local HEAD $FinalSha is not completed successfully."
+    }
+    $run = [string]$latestRun.databaseId
     $artifactRaw = (& $GhExe api "repos/$Repo/actions/runs/$run/artifacts?per_page=100" 2>&1 | Out-String)
     if ($LASTEXITCODE -ne 0) { throw "Unable to list artifacts for run ${run}: $artifactRaw" }
     $artifactResponse = $artifactRaw | ConvertFrom-Json
@@ -482,16 +504,22 @@ function Ensure-StateRoot {
     }
 }
 
-function Read-State([string]$FinalSha) {
+function Read-State([string]$FinalSha, [string]$BuildSha) {
     $saved = if (Test-Path -LiteralPath $StatePath) {
         Get-Content -LiteralPath $StatePath -Raw | ConvertFrom-Json
     } else {
         $null
     }
-    return Get-StateForFinalSha $saved $FinalSha $Port
+    return Get-StateForBuild $saved $FinalSha $BuildSha $Port
 }
 
-function Save-State([int]$CurrentIndex, [int[]]$ConfirmedIndexes, [string]$SavedPort, [string]$FinalSha) {
+function Save-State(
+    [int]$CurrentIndex,
+    [int[]]$ConfirmedIndexes,
+    [string]$SavedPort,
+    [string]$FinalSha,
+    [string]$BuildSha
+) {
     Ensure-StateRoot
     [pscustomobject]@{
         CurrentIndex = $CurrentIndex
@@ -500,6 +528,7 @@ function Save-State([int]$CurrentIndex, [int[]]$ConfirmedIndexes, [string]$Saved
         UpdatedAt = (Get-Date).ToString('o')
         Repository = $Repo
         FinalSha = $FinalSha
+        BuildSha = $BuildSha
     } | ConvertTo-Json | Set-Content -LiteralPath $StatePath -Encoding UTF8
 }
 
@@ -597,10 +626,11 @@ if (-not (Test-Port $Port)) {
     throw 'Port must be COM followed by digits, for example COM6.'
 }
 Resolve-ArtifactRuns $GhExe $FinalSha
+$CiBuildSha = [string]$Items[0].BuildSha
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
-$state = Read-State $FinalSha
+$state = Read-State $FinalSha $CiBuildSha
 $script:CurrentIndex = $state.CurrentIndex
 $script:ConfirmedIndexes = @($state.ConfirmedIndexes)
 $script:CurrentFlashVerified = $false
@@ -704,7 +734,7 @@ function Flash-CurrentItem {
         $result = Invoke-CurrentFlash $item $selectedPort $GhExe $PythonExe $EsptoolWriteOperation $FinalSha
         $outputBox.Text = "Log: $($result.LogPath)`r`n`r`n$($result.Output)"
         if ($result.Success) {
-            Save-State $script:CurrentIndex $script:ConfirmedIndexes $selectedPort $FinalSha
+            Save-State $script:CurrentIndex $script:ConfirmedIndexes $selectedPort $FinalSha $CiBuildSha
             $statusLabel.Text = "Status: $($result.Detail) Check the device, then mark PASS to continue."
             $script:CurrentFlashVerified = $true
         } else {
@@ -726,7 +756,7 @@ $confirmButton.Add_Click({
     $script:CurrentIndex = $next.CurrentIndex
     $script:ConfirmedIndexes = @($next.ConfirmedIndexes)
     $script:CurrentFlashVerified = $false
-    Save-State $script:CurrentIndex $script:ConfirmedIndexes $selectedPort $FinalSha
+    Save-State $script:CurrentIndex $script:ConfirmedIndexes $selectedPort $FinalSha $CiBuildSha
     Update-CurrentDisplay
     if ($next.Completed) {
         Set-Busy $false
