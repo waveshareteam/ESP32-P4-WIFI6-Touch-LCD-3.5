@@ -12,6 +12,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES = ROOT / "examples" / "esp-idf"
 PROFILE_CONFIG = ROOT / "config" / "revision-profiles.json"
+EXAMPLE12_MANIFEST = EXAMPLES / "12_esp32-p4-eye" / "main" / "idf_component.yml"
+EXAMPLE12_IMAGES = EXAMPLES / "12_esp32-p4-eye" / "main" / "ui" / "images"
 
 
 def load_policy() -> dict[str, object]:
@@ -88,6 +90,39 @@ def check_bsp(policy: dict[str, object]) -> list[str]:
     return errors
 
 
+def manifest_dependency_block(text: str, dependency: str) -> str | None:
+    match = re.search(
+        rf"(?ms)^  {re.escape(dependency)}:\n(?P<body>.*?)(?=^  \S|\Z)", text
+    )
+    return match.group("body") if match else None
+
+
+def check_example12_lvgl_contract(
+    manifest_path: Path = EXAMPLE12_MANIFEST, image_dir: Path = EXAMPLE12_IMAGES
+) -> list[str]:
+    errors: list[str] = []
+    manifest = manifest_path.read_text(encoding="utf-8")
+    lvgl = manifest_dependency_block(manifest, "lvgl/lvgl")
+    if lvgl is None:
+        errors.append("Example 12 must directly depend on lvgl/lvgl 8.3.*")
+    else:
+        if not re.search(r'^    version:\s*["\']?8\.3\.\*["\']?\s*$', lvgl, re.MULTILINE):
+            errors.append("Example 12 must pin lvgl/lvgl to 8.3.*")
+        if not re.search(r"^    public:\s*true\s*$", lvgl, re.MULTILINE):
+            errors.append("Example 12 lvgl/lvgl dependency must be public")
+    if manifest_dependency_block(manifest, "espressif/esp_lvgl_port") is not None:
+        errors.append("Example 12 must not directly depend on espressif/esp_lvgl_port")
+
+    images = sorted(image_dir.glob("*.c"))
+    if len(images) != 21:
+        errors.append(f"Example 12 must retain 21 SquareLine image C files, found {len(images)}")
+    for image in images:
+        text = image.read_text(encoding="utf-8")
+        if not all(marker in text for marker in ("lv_img_dsc_t", "LV_IMG_CF", "always_zero")):
+            errors.append(f"{image.relative_to(ROOT)} does not retain the LVGL 8 image contract")
+    return errors
+
+
 def check_workflows() -> list[str]:
     errors = []
     examples = (ROOT / ".github" / "workflows" / "esp-idf.yml").read_text(encoding="utf-8")
@@ -122,6 +157,7 @@ def main() -> int:
     if not args.arduino_only:
         errors.extend(check_profiles(policy))
         errors.extend(check_bsp(policy))
+        errors.extend(check_example12_lvgl_contract())
         errors.extend(check_workflows())
     for error in errors:
         print(f"policy: {error}", file=sys.stderr)

@@ -3,6 +3,11 @@ dependencies:
     version: "==2.0.0"
     public: true
 
+  # SquareLine-generated UI image assets use the LVGL 8 descriptor contract.
+  lvgl/lvgl:
+    version: "8.3.*"
+    public: true
+
   espressif/button:
     # v4.2.0 retains the event, GPIO-device, and multiple-click APIs used here.
     version: "==4.2.0"

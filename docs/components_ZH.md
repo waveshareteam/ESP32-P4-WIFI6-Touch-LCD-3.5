@@ -15,7 +15,7 @@
 | `esp_extractor` | 示例 10、11 | 与其目标相关预编译库一起保留 |
 | 检测模型封装 | 示例 12 | 保留在本地，通过组件管理器使用 `espressif/esp-dl ==3.1.3` |
 | `espressif/button` | 示例 12 | 托管组件，固定为 `==4.2.0` |
-| `espressif/esp_lvgl_port` | 示例 12 | 托管组件，为 ESP-IDF 5.5/6.0 CI 矩阵固定为 `==2.8.0~1` |
+| LVGL 运行时 | 示例 12 | 托管 BSP 引入 `esp_lvgl_adapter`；示例 12 因 21 个 SquareLine 生成的图像资源而直接固定 `lvgl/lvgl` 为 `8.3.*` |
 
 六份复制的本地 BSP 组件变体已删除。公开依赖精确使用
 [`waveshare/esp32_p4_wifi6_touch_lcd_3_5 ==2.0.0`](https://components.espressif.com/components/waveshare/esp32_p4_wifi6_touch_lcd_3_5/versions/2.0.0/readme)。
@@ -35,7 +35,8 @@
 1. 普通托管库优先使用有边界的兼容范围；涉及跨版本 API 或预编译 ABI 时使用精确版本。
 2. 产品应用需要时保留明确的 ESP-IDF 兼容条件；组件更新不得变成硬件验证声明。
 3. 每次只更新一个依赖族，并在 manifest 中记录原因。
-4. 示例 12 的 `espressif/esp_lvgl_port` 保持 `==2.8.0~1`，直到 CI 矩阵跨过
-   ESP-IDF 6.0 或完成对应的 DPI callback API 迁移；`2.9.0` 依赖后续的 callback API。
+4. 示例 12 的 21 个 SquareLine 生成图像资源使用 LVGL 8 描述符契约，因此保持
+   `lvgl/lvgl 8.3.*`。托管 BSP 提供 `esp_lvgl_adapter`；不要添加未被应用直接使用的
+   `esp_lvgl_port` 依赖。迁移到 LVGL 9 前必须重新生成并审计完整 UI。
 5. 以提交后的 GitHub Actions 矩阵作为编译证据。构建通过不是硬件在环（HIL）证据，
    不能替代实机验证。

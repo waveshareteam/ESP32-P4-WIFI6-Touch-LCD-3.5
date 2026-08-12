@@ -16,7 +16,7 @@ product and retains only product-specific glue where an application needs it.
 | `esp_extractor` | Examples 10 and 11 | Keep embedded with its target-specific prebuilt library |
 | Detection model wrappers | Example 12 | Keep locally; consume `espressif/esp-dl ==3.1.3` through Component Manager |
 | `espressif/button` | Example 12 | Managed and pinned to `==4.2.0` |
-| `espressif/esp_lvgl_port` | Example 12 | Managed and pinned to `==2.8.0~1` for the ESP-IDF 5.5/6.0 CI matrix |
+| LVGL runtime | Example 12 | The managed BSP pulls `esp_lvgl_adapter`; Example 12 directly pins `lvgl/lvgl` to `8.3.*` for its 21 SquareLine-generated image assets |
 
 The six copied local BSP component variants have been removed. The public
 dependency is exactly
@@ -45,8 +45,9 @@ claim that those hardware controls are implemented.
    requires them; do not turn a component update into a hardware-validation
    claim.
 3. Update one dependency family at a time and record the reason in the manifest.
-4. Keep Example 12 `espressif/esp_lvgl_port` at `==2.8.0~1` until the CI matrix
-   moves beyond ESP-IDF 6.0 or its DPI callback API migration is complete;
-   `2.9.0` requires the later callback API.
+4. Keep Example 12 on `lvgl/lvgl 8.3.*` while its 21 SquareLine-generated image
+   assets use the LVGL 8 descriptor contract. The managed BSP supplies
+   `esp_lvgl_adapter`; do not add an unused direct `esp_lvgl_port` dependency.
+   Migrating to LVGL 9 requires regenerating and auditing the complete UI.
 5. Use the post-commit GitHub Actions matrix as compile evidence. A green build
    is not HIL evidence and does not replace physical-hardware validation.
