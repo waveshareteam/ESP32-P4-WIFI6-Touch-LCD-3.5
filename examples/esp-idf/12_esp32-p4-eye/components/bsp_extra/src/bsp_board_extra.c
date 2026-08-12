@@ -256,3 +256,36 @@ bool bsp_extra_player_is_playing_by_index(file_iterator_instance_t *instance, in
 {
     return (index == file_iterator_get_index(instance));
 }
+
+esp_err_t bsp_extra_flashlight_init(void)
+{
+    /* Legacy compatibility helper: preserves the pre-migration inert behavior.
+     * The managed BSP v2.0.0 exposes no corresponding flashlight API. */
+    return ESP_OK;
+}
+
+esp_err_t bsp_extra_flashlight_set(bool on)
+{
+    /* Legacy compatibility helper: intentionally inert, not hardware support. */
+    (void)on;
+    return ESP_OK;
+}
+
+void bsp_extra_sdcard_detect_init(void)
+{
+    /* Legacy compatibility helper: preserves the pre-migration no-op contract.
+     * The managed BSP uses SDMMC_SLOT_NO_CD and exposes no card-detect API. */
+}
+
+bool bsp_extra_sdcard_is_present(void)
+{
+    /* Legacy compatibility helper: preserves the pre-migration always-present
+     * SDMMC_SLOT_NO_CD semantic; it does not read a card-detect GPIO. */
+    return true;
+}
+
+void bsp_extra_enter_sleep_init(void)
+{
+    /* Legacy compatibility helper: preserves the pre-migration no-op contract.
+     * The managed BSP v2.0.0 exposes no corresponding sleep helper API. */
+}

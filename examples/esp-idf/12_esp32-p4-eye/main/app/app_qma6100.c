@@ -276,7 +276,7 @@ static void qma6100_display_rotation_task(void *pvParameters)
 
                     // Apply display rotation with thread safety
                     bsp_display_lock(0);
-                    bsp_display_rotate(new_rotation);
+                    bsp_display_rotate(NULL, new_rotation);
                     bsp_display_unlock();
 
                     current_rotation = new_rotation;

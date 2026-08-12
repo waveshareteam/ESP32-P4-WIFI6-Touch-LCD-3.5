@@ -214,6 +214,18 @@ bool bsp_extra_player_is_playing_by_path(const char *file_path);
  */
 bool bsp_extra_player_is_playing_by_index(file_iterator_instance_t *instance, int index);
 
+/**
+ * Legacy migration compatibility helpers. They preserve the pre-migration
+ * inert and SDMMC_SLOT_NO_CD behavior; the managed BSP v2.0.0 exposes no
+ * corresponding flashlight, card-detect, or sleep helper APIs. These are not
+ * declarations of additional hardware support.
+ */
+esp_err_t bsp_extra_flashlight_init(void);
+esp_err_t bsp_extra_flashlight_set(bool on);
+void bsp_extra_sdcard_detect_init(void);
+bool bsp_extra_sdcard_is_present(void);
+void bsp_extra_enter_sleep_init(void);
+
 #ifdef __cplusplus
 }
 #endif

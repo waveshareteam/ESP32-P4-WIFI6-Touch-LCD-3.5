@@ -9,24 +9,17 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $Repo = 'waveshareteam/ESP32-P4-WIFI6-Touch-LCD-3.5'
-$Workflow = 'esp-idf.yml'
-$DefaultStartIndex = 1
 $ExpectedTarget = 'esp32p4'
 $ExpectedFramework = 'ESP-IDF'
 $ExpectedBaud = 460800
-$FlashCapacity = 16MB
+$FlashCapacity = 32MB
+$StateVersion = 2
+$DefaultStartIndex = 1
+$RevisionWarning = 'Silicon revision cannot establish PCB/electrical revision.'
 $ProjectNames = @(
-    '01_HowToCreateProject',
-    '02_HelloWorld',
-    '03_i2c_tools',
-    '04_wifistation',
-    '05_sdmmc',
-    '06_I2SCodec',
-    '07_Displaycolorbar',
-    '08_lvgl_demo_v9',
-    '09_video_lcd_display',
-    '10_mp4_player',
-    '11_esp_brookesia_phone',
+    '01_HowToCreateProject', '02_HelloWorld', '03_i2c_tools', '04_wifistation',
+    '05_sdmmc', '06_I2SCodec', '07_Displaycolorbar', '08_lvgl_demo_v9',
+    '09_video_lcd_display', '10_mp4_player', '11_esp_brookesia_phone',
     '12_esp32-p4-eye'
 )
 $Versions = @('v5.5.5', 'v6.0.2')
@@ -34,88 +27,31 @@ $Items = @()
 $itemIndex = 1
 foreach ($projectName in $ProjectNames) {
     foreach ($version in $Versions) {
+        $prefix = "esp-idf-$version-$projectName-esp32p4-rev1_3-"
         $Items += [pscustomobject]@{
-            Index = $itemIndex
-            Workflow = $Workflow
-            Name = $projectName
-            Framework = $ExpectedFramework
-            Version = $version
-            SourceProject = "examples/esp-idf/$projectName"
-            Artifact = "esp-idf-$version-$projectName-esp32p4-<ci-build-sha>"
-            BuildSha = '<ci-build-sha>'
+            Index = $itemIndex; Workflow = 'esp-idf.yml'; Profile = 'rev1_3'
+            Name = $projectName; Framework = $ExpectedFramework; Version = $version
+            SourceProject = "examples/esp-idf/$projectName"; Prefix = $prefix
+            Artifact = "$prefix<final-sha>"; BuildSha = '<final-sha>'; Run = $null
         }
         $itemIndex++
     }
 }
-
-function Test-Port([string]$Value) {
-    return $Value -match '^COM\d+$'
+foreach ($profile in @('rev1_3', 'rev3_x')) {
+    $prefix = "product-firmware-v6.0.2-esp32p4-$profile-"
+    $Items += [pscustomobject]@{
+        Index = $itemIndex; Workflow = 'product-firmware.yml'; Profile = $profile
+        Name = '12_esp32-p4-eye'; Framework = $ExpectedFramework; Version = 'v6.0.2'
+        SourceProject = 'examples/esp-idf/12_esp32-p4-eye'; Prefix = $prefix
+        Artifact = "$prefix<final-sha>"; BuildSha = '<final-sha>'; Run = $null
+    }
+    $itemIndex++
 }
 
-function Get-NextProgress([int]$CurrentIndex, [int[]]$ConfirmedIndexes, [int]$ItemCount) {
-    if ($ItemCount -lt 1 -or $CurrentIndex -lt 1 -or $CurrentIndex -gt $ItemCount) {
-        throw 'Progress indexes must be within the item range.'
-    }
-    $confirmed = @(
-        $ConfirmedIndexes + $CurrentIndex |
-            Where-Object { $_ -ge 1 -and $_ -le $ItemCount } |
-            Sort-Object -Unique
-    )
-    return [pscustomobject]@{
-        CurrentIndex = if ($CurrentIndex -eq $ItemCount) { $CurrentIndex } else { $CurrentIndex + 1 }
-        ConfirmedIndexes = $confirmed
-        Completed = $CurrentIndex -eq $ItemCount
-    }
-}
-
-function Get-StateForBuild(
-    $Saved,
-    [string]$ExpectedFinalSha,
-    [string]$ExpectedBuildSha,
-    [string]$DefaultPort
-) {
-    if (
-        -not $Saved -or
-        -not $Saved.PSObject.Properties['FinalSha'] -or
-        -not $Saved.PSObject.Properties['BuildSha'] -or
-        -not $Saved.PSObject.Properties['CurrentIndex'] -or
-        -not $Saved.PSObject.Properties['ConfirmedIndexes'] -or
-        [string]$Saved.FinalSha -ne $ExpectedFinalSha -or
-        [string]$Saved.BuildSha -ne $ExpectedBuildSha
-    ) {
-        return [pscustomobject]@{ CurrentIndex = $DefaultStartIndex; ConfirmedIndexes = @(); Port = $DefaultPort }
-    }
-    $index = [int]$Saved.CurrentIndex
-    if ($index -lt 1 -or $index -gt $Items.Count) {
-        throw "Saved CurrentIndex is outside 1..$($Items.Count)."
-    }
-    return [pscustomobject]@{
-        CurrentIndex = $index
-        ConfirmedIndexes = @(
-            $Saved.ConfirmedIndexes |
-                ForEach-Object { [int]$_ } |
-                Where-Object { $_ -ge 1 -and $_ -le $Items.Count } |
-                Sort-Object -Unique
-        )
-        Port = $DefaultPort
-    }
-}
-
-function Test-RelativePackagePath([string]$PackageRoot, [string]$RelativePath) {
-    if ([string]::IsNullOrWhiteSpace($RelativePath) -or [System.IO.Path]::IsPathRooted($RelativePath)) {
-        return $false
-    }
-    $root = [System.IO.Path]::GetFullPath($PackageRoot).TrimEnd(
-        [System.IO.Path]::DirectorySeparatorChar,
-        [System.IO.Path]::AltDirectorySeparatorChar
-    ) + [System.IO.Path]::DirectorySeparatorChar
-    $candidate = [System.IO.Path]::GetFullPath((Join-Path $PackageRoot $RelativePath))
-    return $candidate.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)
-}
+function Test-Port([string]$Value) { return $Value -match '^COM\d+$' }
 
 function Get-FileSha256([string]$Path) {
-    $stream = $null
-    $algorithm = $null
+    $stream = $null; $algorithm = $null
     try {
         $stream = [System.IO.File]::OpenRead($Path)
         $algorithm = [System.Security.Cryptography.SHA256]::Create()
@@ -127,375 +63,228 @@ function Get-FileSha256([string]$Path) {
     }
 }
 
+function Test-RelativePackagePath([string]$PackageRoot, [string]$RelativePath) {
+    if ([string]::IsNullOrWhiteSpace($RelativePath) -or
+        $RelativePath.Contains('\') -or [System.IO.Path]::IsPathRooted($RelativePath) -or
+        $RelativePath -notmatch '^[^/]+(?:/[^/]+)*$' -or
+        @($RelativePath.Split('/') | Where-Object { $_ -in @('.', '..') }).Count) { return $false }
+    $root = [System.IO.Path]::GetFullPath($PackageRoot).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    $candidate = [System.IO.Path]::GetFullPath((Join-Path $PackageRoot ($RelativePath.Replace('/', [System.IO.Path]::DirectorySeparatorChar))))
+    return $candidate.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
 function Get-ArtifactBuildSha([string]$ArtifactName, [string]$ExpectedPrefix) {
-    $pattern = '^' + [regex]::Escape($ExpectedPrefix) + '([0-9a-fA-F]{40})$'
-    $match = [regex]::Match($ArtifactName, $pattern)
-    if (-not $match.Success) {
-        throw "Artifact name does not match $ExpectedPrefix<ci-build-sha>."
-    }
+    $match = [regex]::Match($ArtifactName, ('^' + [regex]::Escape($ExpectedPrefix) + '([0-9a-fA-F]{40})$'))
+    if (-not $match.Success) { throw "Artifact name does not match $ExpectedPrefix<final-sha>." }
     return $match.Groups[1].Value.ToLowerInvariant()
+}
+
+function Get-RevisionProfile([int]$Major, [int]$Minor) {
+    if ($Major -lt 0 -or $Minor -lt 0) { throw 'Invalid silicon revision.' }
+    if ($Major -lt 3) { return 'rev1_3' }
+    return 'rev3_x'
+}
+
+function Parse-SiliconProbe([string]$ProbeText) {
+    $match = [regex]::Match($ProbeText, '(?im)\bESP32[- ]P4\b[^\r\n]*?\brevision\s+v(?<major>\d+)\.(?<minor>\d+)\b')
+    if (-not $match.Success) { throw "Refusing to flash: no explicit ESP32-P4 revision vMAJOR.MINOR. $RevisionWarning" }
+    $major = [int]$match.Groups['major'].Value; $minor = [int]$match.Groups['minor'].Value
+    return [pscustomobject]@{ Chip = 'ESP32-P4'; Revision = "v$major.$minor"; Profile = Get-RevisionProfile $major $minor }
+}
+
+function Assert-ProfileForSilicon($Item, $Silicon) {
+    if ([string]$Item.Profile -ne [string]$Silicon.Profile) {
+        throw "Refusing profile $($Item.Profile) for ESP32-P4 $($Silicon.Revision); detected profile is $($Silicon.Profile). $RevisionWarning"
+    }
+}
+
+function Test-NoC6Content([string]$PackageDir, [string]$ManifestText) {
+    $pattern = '(?i)(?:esp32[-_]?c6|\bc6\b)'
+    if ($ManifestText -match $pattern) { throw 'Package manifest identifies ESP32-C6 content.' }
+    $base = [System.IO.Path]::GetFullPath($PackageDir).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+    foreach ($file in @(Get-ChildItem -LiteralPath $PackageDir -Recurse -File)) {
+        $relative = $file.FullName.Substring($base.Length).Replace('\', '/')
+        if ($relative -match $pattern) { throw "Package path identifies ESP32-C6 content: $relative" }
+        if ($file.Length -le 1MB -and $file.Extension -in @('.json', '.txt', '.sh', '.bat', '.args') -and (Get-Content -LiteralPath $file.FullName -Raw) -match $pattern) {
+            throw "Package text identifies ESP32-C6 content: $relative"
+        }
+    }
+}
+
+function Test-NoEraseContent([string]$PackageDir, [string]$ManifestText) {
+    $pattern = '(?i)(?:--?erase[-_]?all|erase[-_]?(?:all|flash|region))'
+    if ($ManifestText -match $pattern) { throw 'Package manifest contains a forbidden erase operation.' }
+    foreach ($file in @(Get-ChildItem -LiteralPath $PackageDir -Recurse -File)) {
+        if ($file.Length -le 1MB -and ($file.Extension -in @('.json', '.txt', '.sh', '.bat', '.args') -or $file.Name -eq 'flash_args') -and (Get-Content -LiteralPath $file.FullName -Raw) -match $pattern) {
+            throw "Package helper contains a forbidden erase operation: $($file.Name)"
+        }
+    }
+}
+
+function Get-EspImageChipId([string]$Path) {
+    $header = [System.IO.File]::ReadAllBytes($Path)
+    if ($header.Length -eq 0 -or $header[0] -ne 0xE9) { return $null }
+    if ($header.Length -lt 24) { throw "ESP image header is truncated: $Path" }
+    if ($header[1] -lt 1 -or $header[1] -gt 16) { throw "ESP image header has an unsafe segment count: $Path" }
+    $chipId = [BitConverter]::ToUInt16($header, 12)
+    if ($chipId -ne 18) { throw "ESP image header is not ESP32-P4: $Path" }
+    return [int]$chipId
 }
 
 function Test-PackageManifest([string]$PackageDir, $Item, [string]$ArtifactSha) {
     $manifestPath = Join-Path $PackageDir 'manifest.json'
-    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
-        throw 'Package manifest.json is missing.'
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw 'Package manifest.json is missing.' }
+    $manifestText = Get-Content -LiteralPath $manifestPath -Raw
+    $manifest = $manifestText | ConvertFrom-Json
+    if ([int]$manifest.schema_version -ne 2 -or [string]$manifest.artifact_kind -ne 'esp-idf-flashable' -or
+        [string]$manifest.profile -ne $Item.Profile -or [string]$manifest.name -ne $Item.Name -or
+        [string]$manifest.framework -ine $Item.Framework -or [string]$manifest.framework_version -ne $Item.Version -or
+        [string]$manifest.target -ne $ExpectedTarget -or [string]$manifest.project_path -ne $Item.SourceProject -or
+        [string]$manifest.git_sha -ne $ArtifactSha -or $manifest.host_only -isnot [bool] -or -not [bool]$manifest.host_only -or
+        $manifest.contains_c6_firmware -isnot [bool] -or [bool]$manifest.contains_c6_firmware) {
+        throw 'Package manifest identity, profile, or host-only boundary is unsafe.'
     }
-    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-    if (
-        [string]$manifest.name -ne $Item.Name -or
-        [string]$manifest.framework -ine $Item.Framework -or
-        [string]$manifest.framework_version -ne $Item.Version -or
-        [string]$manifest.target -ne $ExpectedTarget -or
-        [string]$manifest.project_path -ne $Item.SourceProject -or
-        [string]$manifest.git_sha -ne $ArtifactSha
-    ) {
-        throw 'Package manifest identity does not match the selected ESP32-P4 CI artifact.'
-    }
-    if ([int64]$manifest.baud -ne $ExpectedBaud -or @($manifest.files).Count -lt 1) {
+    if ([int64]$manifest.baud -ne $ExpectedBaud -or @($manifest.files).Count -lt 1 -or
+        [string]$manifest.flash_command -notmatch '(?i)\bwrite(?:-|_)flash\b' -or
+        [string]$manifest.flash_command -match '(?i)(?:--?erase[-_]?all|erase[-_]?(?:all|flash|region))') {
         throw 'Package manifest flash metadata is incomplete or unsafe.'
     }
-
-    $plan = @()
-    $offsets = @{}
+    Test-NoC6Content $PackageDir $manifestText
+    Test-NoEraseContent $PackageDir $manifestText
+    $plan = @(); $offsets = @{}; $p4ImageCount = 0
     foreach ($file in @($manifest.files)) {
         $relativePath = [string]$file.path
-        if (
-            -not (Test-RelativePackagePath $PackageDir $relativePath) -or
-            [string]$file.sha256 -notmatch '^[0-9a-fA-F]{64}$' -or
-            [int64]$file.size -le 0
-        ) {
-            throw "Manifest file metadata is unsafe: $relativePath"
+        if (-not (Test-RelativePackagePath $PackageDir $relativePath) -or [string]$file.sha256 -notmatch '^[0-9a-fA-F]{64}$' -or
+            [int64]$file.size -le 0 -or [string]$file.offset -notmatch '^0x[0-9a-fA-F]+$') { throw "Manifest file metadata is unsafe: $relativePath" }
+        $fullPath = [System.IO.Path]::GetFullPath((Join-Path $PackageDir ($relativePath.Replace('/', [System.IO.Path]::DirectorySeparatorChar))))
+        if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) { throw "Manifest file is missing: $relativePath" }
+        $actualHash = Get-FileSha256 $fullPath; $actualSize = [int64](Get-Item -LiteralPath $fullPath).Length
+        if ($actualHash -ne ([string]$file.sha256).ToLowerInvariant() -or $actualSize -ne [int64]$file.size) { throw "Manifest checksum or size verification failed: $relativePath" }
+        $actualChipId = Get-EspImageChipId $fullPath
+        if ($null -eq $actualChipId) {
+            if ($null -ne $file.image_chip_id) { throw "Raw manifest file has an image_chip_id marker: $relativePath" }
         }
-        $fullPath = [System.IO.Path]::GetFullPath((Join-Path $PackageDir $relativePath))
-        if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
-            throw "Manifest file is missing: $relativePath"
-        }
-        $actualHash = Get-FileSha256 $fullPath
-        $expectedHash = ([string]$file.sha256).ToLowerInvariant()
-        $actualSize = [int64](Get-Item -LiteralPath $fullPath).Length
-        if ($actualHash -ne $expectedHash -or $actualSize -ne [int64]$file.size) {
-            throw "Manifest checksum or size verification failed: $relativePath"
-        }
-        if ([string]$file.offset -notmatch '^0x[0-9a-fA-F]+$') {
-            throw "Manifest flash offset is invalid: $relativePath"
-        }
+        elseif ($actualChipId -ne 18 -or [int]$file.image_chip_id -ne $actualChipId) { throw "Manifest image_chip_id does not match the ESP32-P4 header: $relativePath" }
+        else { $p4ImageCount++ }
         $offset = [Convert]::ToInt64(([string]$file.offset).Substring(2), 16)
-        if ($offsets.ContainsKey($offset) -or $offset + [int64]$file.size -gt $FlashCapacity) {
-            throw "Manifest flash range is unsafe: $relativePath"
-        }
-        $offsets[$offset] = $true
-        $plan += [pscustomobject]@{ Offset = $offset; Size = [int64]$file.size; Path = $fullPath }
-    }
-    if ($plan.Count -lt 1) {
-        throw 'Package manifest contains no flashable files.'
+        if ($offsets.ContainsKey($offset) -or $offset + $actualSize -gt $FlashCapacity) { throw "Manifest flash range is unsafe: $relativePath" }
+        $offsets[$offset] = $true; $plan += [pscustomobject]@{ Offset = $offset; Size = $actualSize; Path = $fullPath }
     }
     $orderedPlan = @($plan | Sort-Object Offset)
     for ($index = 1; $index -lt $orderedPlan.Count; ++$index) {
-        $previous = $orderedPlan[$index - 1]
-        if ($previous.Offset + $previous.Size -gt $orderedPlan[$index].Offset) {
-            throw 'Package manifest contains overlapping flash ranges.'
-        }
+        if ($orderedPlan[$index - 1].Offset + $orderedPlan[$index - 1].Size -gt $orderedPlan[$index].Offset) { throw 'Package manifest contains overlapping flash ranges.' }
     }
+    if ($p4ImageCount -lt 1) { throw 'Package manifest has no valid ESP32-P4 image header.' }
     return $orderedPlan
 }
 
-function Invoke-SelfTest {
-    if ($Items.Count -ne ($ProjectNames.Count * $Versions.Count) -or $Items.Count -ne 24) {
-        throw 'SelfTest expected 24 ESP-IDF matrix items.'
+function Get-StateForBuild($Saved, [string]$FinalSha, [string]$BuildSha, [string]$Profile, [string]$DefaultPort, [int]$ItemCount) {
+    if (-not $Saved -or -not $Saved.PSObject.Properties['StateVersion'] -or -not $Saved.PSObject.Properties['FinalSha'] -or
+        -not $Saved.PSObject.Properties['BuildSha'] -or -not $Saved.PSObject.Properties['Profile'] -or
+        -not $Saved.PSObject.Properties['CurrentIndex'] -or -not $Saved.PSObject.Properties['ConfirmedIndexes'] -or
+        [int]$Saved.StateVersion -ne $StateVersion -or [string]$Saved.FinalSha -ne $FinalSha -or
+        [string]$Saved.BuildSha -ne $BuildSha -or [string]$Saved.Profile -ne $Profile -or
+        -not $Saved.PSObject.Properties['Port'] -or [string]$Saved.Port -ne $DefaultPort) {
+        return [pscustomobject]@{ StateVersion = $StateVersion; FinalSha = $FinalSha; BuildSha = $BuildSha; Profile = $Profile; Port = $DefaultPort; CurrentIndex = $DefaultStartIndex; ConfirmedIndexes = @(); Completed = $false; Attempts = @(); Results = @() }
     }
-    $current = $DefaultStartIndex
-    $confirmed = @()
-    $transitions = 0
-    while ($current -lt $Items.Count) {
-        $next = Get-NextProgress $current $confirmed $Items.Count
-        if ($next.Completed -or $next.CurrentIndex -ne ($current + 1)) {
-            throw 'SelfTest expected one-item progress.'
-        }
-        $current = $next.CurrentIndex
-        $confirmed = @($next.ConfirmedIndexes)
-        $transitions++
+    $confirmed = @($Saved.ConfirmedIndexes | ForEach-Object { [int]$_ } | Where-Object { $_ -ge 1 -and $_ -le $ItemCount } | Sort-Object -Unique)
+    # State files written before Completed existed remain compatible: full confirmation is completion.
+    $completed = ($confirmed.Count -eq $ItemCount) -or ($Saved.PSObject.Properties['Completed'] -and [bool]$Saved.Completed)
+    if ($completed) {
+        $index = -1
     }
-    $last = Get-NextProgress $current $confirmed $Items.Count
-    if (-not $last.Completed -or @($last.ConfirmedIndexes).Count -ne $Items.Count) {
-        throw 'SelfTest did not complete every item.'
+    else {
+        $index = [int]$Saved.CurrentIndex
+        if ($index -lt 1 -or $index -gt $ItemCount) { throw "Saved CurrentIndex is outside 1..$ItemCount." }
     }
-    $reset = Get-StateForBuild ([pscustomobject]@{
-        FinalSha = 'different'
-        BuildSha = 'expected-build'
-        CurrentIndex = 4
-        ConfirmedIndexes = @(1, 2, 3)
-        Port = 'ignored'
-    }) 'expected' 'expected-build' ''
-    if ($reset.CurrentIndex -ne 1 -or @($reset.ConfirmedIndexes).Count -ne 0) {
-        throw 'SelfTest did not reset state for a new SHA.'
-    }
-    $buildReset = Get-StateForBuild ([pscustomobject]@{
-        FinalSha = 'expected'
-        BuildSha = 'different-build'
-        CurrentIndex = 4
-        ConfirmedIndexes = @(1, 2, 3)
-        Port = 'ignored'
-    }) 'expected' 'expected-build' ''
-    if ($buildReset.CurrentIndex -ne 1 -or @($buildReset.ConfirmedIndexes).Count -ne 0) {
-        throw 'SelfTest did not reset state for a new CI build SHA.'
-    }
-    if (
-        (Test-RelativePackagePath 'C:\package' '..\escape.bin') -or
-        (Test-RelativePackagePath 'C:\package' 'C:\escape.bin') -or
-        -not (Test-RelativePackagePath 'C:\package' 'bin\app.bin')
-    ) {
-        throw 'SelfTest relative manifest path validation failed.'
-    }
-    $syntheticBuildSha = 'fedcba9876543210fedcba9876543210fedcba98'
-    $syntheticPrefix = 'esp-idf-v5.5.5-example-esp32p4-'
-    if ((Get-ArtifactBuildSha ($syntheticPrefix + $syntheticBuildSha) $syntheticPrefix) -ne $syntheticBuildSha) {
-        throw 'SelfTest did not resolve the CI build SHA from an artifact name.'
-    }
-    $rejectedArtifactName = $false
-    try { [void](Get-ArtifactBuildSha ($syntheticPrefix + 'not-a-sha') $syntheticPrefix) } catch { $rejectedArtifactName = $true }
-    if (-not $rejectedArtifactName) {
-        throw 'SelfTest did not reject an artifact without a full CI build SHA.'
-    }
-
-    $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('waveshare-flasher-' + [guid]::NewGuid().ToString('N'))
-    try {
-        $binDir = Join-Path $tempRoot 'bin'
-        New-Item -ItemType Directory -Path $binDir -Force | Out-Null
-        $binPath = Join-Path $binDir 'app.bin'
-        [System.IO.File]::WriteAllBytes($binPath, [byte[]](1, 2, 3, 4))
-        $item = $Items[0]
-        $sha = '0123456789abcdef0123456789abcdef01234567'
-        $manifest = [ordered]@{
-            name = $item.Name
-            framework = $item.Framework
-            framework_version = $item.Version
-            target = $ExpectedTarget
-            project_path = $item.SourceProject
-            git_sha = $sha
-            timestamp_utc = '2026-01-01T00:00:00Z'
-            baud = $ExpectedBaud
-            files = @([ordered]@{
-                offset = '0x10000'
-                path = 'bin/app.bin'
-                size = 4
-                sha256 = Get-FileSha256 $binPath
-            })
-            flash_command = 'synthetic self-test only'
-        }
-        $manifestPath = Join-Path $tempRoot 'manifest.json'
-        $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
-        $plan = @(Test-PackageManifest $tempRoot $item $sha)
-        if ($plan.Count -ne 1 -or $plan[0].Offset -ne 0x10000) {
-            throw 'SelfTest valid manifest was not accepted.'
-        }
-        $manifest.target = 'esp32c6'
-        $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
-        $rejectedC6 = $false
-        try { [void](Test-PackageManifest $tempRoot $item $sha) } catch { $rejectedC6 = $true }
-        if (-not $rejectedC6) {
-            throw 'SelfTest did not reject an ESP32-C6 manifest.'
-        }
-    }
-    finally {
-        if (Test-Path -LiteralPath $tempRoot) {
-            Remove-Item -LiteralPath $tempRoot -Recurse -Force
-        }
-    }
-    Write-Output 'SELF_TEST_OK items=24 transitions=23 completed=24 target=esp32p4 c6Rejected=true artifactShaBound=true'
+    $attempts = if ($Saved.PSObject.Properties['Attempts']) { @($Saved.Attempts) } else { @() }
+    $results = if ($Saved.PSObject.Properties['Results']) { @($Saved.Results) } else { @() }
+    return [pscustomobject]@{ StateVersion = $StateVersion; FinalSha = $FinalSha; BuildSha = $BuildSha; Profile = $Profile; Port = $DefaultPort; CurrentIndex = $index; ConfirmedIndexes = $confirmed; Completed = $completed; Attempts = $attempts; Results = $results }
 }
 
-if ($SelfTest) {
-    Invoke-SelfTest
-    return
+function Get-NextProgress([int]$CurrentIndex, [int[]]$ConfirmedIndexes, [int]$ItemCount) {
+    if ($CurrentIndex -lt 1 -or $CurrentIndex -gt $ItemCount) { throw 'Progress indexes must be within the item range.' }
+    return [pscustomobject]@{ CurrentIndex = if ($CurrentIndex -eq $ItemCount) { $CurrentIndex } else { $CurrentIndex + 1 }; ConfirmedIndexes = @($ConfirmedIndexes + $CurrentIndex | Where-Object { $_ -ge 1 -and $_ -le $ItemCount } | Sort-Object -Unique); Completed = $CurrentIndex -eq $ItemCount }
 }
 
-if ($ListOnly) {
-    Write-Output 'finalSHA=resolved-at-runtime'
-    Write-Output 'defaultPort=auto-detect-at-runtime'
-    Write-Output "startIndex=$DefaultStartIndex"
-    Write-Output 'target=esp32p4'
-    Write-Output "baud=$ExpectedBaud"
-    foreach ($item in $Items) {
-        Write-Output ('{0}: workflow={1} run=resolved-at-runtime artifact={2} project={3}' -f $item.Index, $item.Workflow, $item.Artifact, $item.SourceProject)
+function Save-State($State, [string]$Path) {
+    [ordered]@{
+        StateVersion = $State.StateVersion; FinalSha = $State.FinalSha; BuildSha = $State.BuildSha
+        Profile = $State.Profile; Port = $State.Port; CurrentIndex = $State.CurrentIndex
+        ConfirmedIndexes = @($State.ConfirmedIndexes); Completed = [bool]$State.Completed
+        Attempts = @($State.Attempts); Results = @($State.Results)
+    } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $Path -Encoding UTF8
+}
+
+function New-ProgressRecord($Item, $State, [string]$Status, [string]$LogPath) {
+    return [pscustomobject][ordered]@{
+        Index = $Item.Index; Item = "$($Item.Workflow):$($Item.Profile):$($Item.Name):$($Item.Version)"
+        SourceProject = $Item.SourceProject; Artifact = $Item.Artifact; FinalSha = $State.FinalSha; BuildSha = $State.BuildSha
+        Profile = $State.Profile; Port = $State.Port; Status = $Status
+        TimestampUtc = [DateTime]::UtcNow.ToString('o'); LogPath = $LogPath
     }
-    return
 }
-
-function Resolve-DefaultPort {
-    $pnpPorts = @(
-        Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue |
-            Where-Object { $_.PNPDeviceID -match 'VID_303A&PID_1001' -and $_.Name -match '\(COM\d+\)' } |
-            ForEach-Object { [regex]::Match($_.Name, '\((COM\d+)\)').Groups[1].Value } |
-            Sort-Object -Unique
-    )
-    if ($pnpPorts.Count -eq 1) { return $pnpPorts[0] }
-    throw 'Unable to identify exactly one ESP32-P4 USB serial port; pass -Port COMx.'
-}
-
-$RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$StateRoot = Join-Path $env:LOCALAPPDATA 'Waveshare\ESP32-P4-WIFI6-Touch-LCD-3.5\ci-firmware'
-$StatePath = Join-Path $StateRoot 'state-v1.json'
 
 function Resolve-Executable([string]$Name, [string[]]$Fallbacks) {
     $command = Get-Command $Name -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($command -and $command.Source) { return $command.Source }
-    foreach ($candidate in $Fallbacks) {
-        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
-    }
+    foreach ($candidate in $Fallbacks) { if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate } }
     throw "$Name was not found on PATH or in the supported fallback locations."
 }
-
-function Resolve-Git {
-    return Resolve-Executable 'git' @(
-        (Join-Path ${env:ProgramFiles} 'Git\cmd\git.exe'),
-        (Join-Path ${env:ProgramFiles} 'Git\bin\git.exe'),
-        'C:\Git\cmd\git.exe',
-        'D:\Git\cmd\git.exe'
-    )
-}
-
-function Resolve-Gh {
-    return Resolve-Executable 'gh' @(
-        (Join-Path ${env:ProgramFiles} 'GitHub CLI\gh.exe'),
-        (Join-Path ${env:ProgramFiles} 'GitHub CLI\bin\gh.exe')
-    )
-}
-
+function Resolve-Git { return Resolve-Executable 'git' @((Join-Path ${env:ProgramFiles} 'Git\cmd\git.exe'), (Join-Path ${env:ProgramFiles} 'Git\bin\git.exe'), 'C:\Git\cmd\git.exe', 'D:\Git\cmd\git.exe') }
+function Resolve-Gh { return Resolve-Executable 'gh' @((Join-Path ${env:ProgramFiles} 'GitHub CLI\gh.exe'), (Join-Path ${env:ProgramFiles} 'GitHub CLI\bin\gh.exe')) }
 function Resolve-PythonWithEsptool {
-    $command = Get-Command python -ErrorAction SilentlyContinue | Select-Object -First 1
-    $candidates = @()
+    $candidates = @(); $command = Get-Command python -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($command -and $command.Source) { $candidates += $command.Source }
-    foreach ($programFiles in (@($env:ProgramFiles, ${env:ProgramFiles(x86)}) | Where-Object { $_ })) {
-        $candidates += @(
-            Get-ChildItem -Path (Join-Path $programFiles 'Python*') -File -Filter python.exe -ErrorAction SilentlyContinue |
-                ForEach-Object FullName
-        )
-    }
     foreach ($root in @((Join-Path $env:USERPROFILE '.espressif\python_env'), 'C:\Espressif', 'D:\espressif')) {
-        if (Test-Path -LiteralPath $root) {
-            $candidates += @(
-                Get-ChildItem -LiteralPath $root -Recurse -File -Filter python.exe -ErrorAction SilentlyContinue |
-                    Where-Object { $_.FullName -match '[\\/]python_env[\\/].+[\\/]Scripts[\\/]python\.exe$' } |
-                    ForEach-Object FullName
-            )
-        }
+        if (Test-Path -LiteralPath $root) { $candidates += @(Get-ChildItem -LiteralPath $root -Recurse -File -Filter python.exe -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match '[\\/]python_env[\\/].+[\\/]Scripts[\\/]python\.exe$' } | ForEach-Object FullName) }
     }
-    foreach ($candidate in @($candidates | Select-Object -Unique)) {
-        $savedErrorActionPreference = $ErrorActionPreference
-        $probeExitCode = $null
-        try {
-            $ErrorActionPreference = 'Continue'
-            & $candidate -c 'import esptool' *> $null
-            $probeExitCode = $LASTEXITCODE
-        }
-        catch { $probeExitCode = -1 }
-        finally { $ErrorActionPreference = $savedErrorActionPreference }
-        if ($probeExitCode -eq 0) { return $candidate }
-    }
+    foreach ($candidate in @($candidates | Select-Object -Unique)) { & $candidate -c 'import esptool' *> $null; if ($LASTEXITCODE -eq 0) { return $candidate } }
     throw 'No Python interpreter with esptool was found.'
 }
-
 function Resolve-EsptoolWriteOperation([string]$PythonExe) {
-    foreach ($operation in @('write-flash', 'write_flash')) {
-        $savedErrorActionPreference = $ErrorActionPreference
-        $probeExitCode = $null
-        try {
-            $ErrorActionPreference = 'Continue'
-            & $PythonExe -m esptool $operation --help *> $null
-            $probeExitCode = $LASTEXITCODE
-        }
-        catch { $probeExitCode = -1 }
-        finally { $ErrorActionPreference = $savedErrorActionPreference }
-        if ($probeExitCode -eq 0) { return $operation }
-    }
+    foreach ($operation in @('write-flash', 'write_flash')) { & $PythonExe -m esptool $operation --help *> $null; if ($LASTEXITCODE -eq 0) { return $operation } }
     throw 'The installed esptool does not expose a supported write-flash operation.'
 }
-
-function Resolve-FinalSha([string]$GitExe) {
-    $sha = (& $GitExe -C $RepoRoot rev-parse HEAD 2>&1 | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0 -or $sha -notmatch '^[0-9a-fA-F]{40}$') {
-        throw 'Unable to resolve a full local git HEAD SHA.'
-    }
-    return $sha.ToLowerInvariant()
+function Resolve-DefaultPort {
+    $ports = @(Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue | Where-Object { $_.PNPDeviceID -match 'VID_303A&PID_1001' -and $_.Name -match '\(COM\d+\)' } | ForEach-Object { [regex]::Match($_.Name, '\((COM\d+)\)').Groups[1].Value } | Sort-Object -Unique)
+    if ($ports.Count -eq 1) { return $ports[0] }; throw 'Unable to identify exactly one ESP32-P4 USB serial port; pass -Port COMx.'
+}
+function Probe-Silicon([string]$PythonExe, [string]$ProbePort) {
+    foreach ($operation in @('flash-id', 'flash_id')) { $output = (& $PythonExe -m esptool --chip $ExpectedTarget --port $ProbePort $operation 2>&1 | Out-String); try { return Parse-SiliconProbe $output } catch {} }
+    throw "Refusing to flash ${ProbePort}: esptool did not establish an ESP32-P4 revision. $RevisionWarning"
 }
 
-function Assert-CleanWorktree([string]$GitExe) {
-    $status = (& $GitExe -C $RepoRoot status --porcelain=v1 --untracked-files=all 2>&1 | Out-String)
-    if ($LASTEXITCODE -ne 0) { throw 'Unable to determine whether the working tree is clean.' }
-    if (-not [string]::IsNullOrWhiteSpace($status)) {
-        throw 'Refusing to continue: the working tree has staged, unstaged, or untracked changes.'
-    }
-}
-
-function Resolve-CurrentBranch([string]$GitExe) {
+function Assert-LocalAndPullRequest([string]$GitExe, [string]$GhExe, [string]$RepoRoot) {
+    $finalSha = (& $GitExe -C $RepoRoot rev-parse HEAD 2>&1 | Out-String).Trim().ToLowerInvariant()
+    if ($LASTEXITCODE -ne 0 -or $finalSha -notmatch '^[0-9a-f]{40}$') { throw 'Unable to resolve a full local git HEAD SHA.' }
+    if (-not [string]::IsNullOrWhiteSpace((& $GitExe -C $RepoRoot status --porcelain=v1 --untracked-files=all 2>&1 | Out-String))) { throw 'Refusing to continue: the working tree must be clean.' }
     $branch = (& $GitExe -C $RepoRoot symbolic-ref --quiet --short HEAD 2>&1 | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($branch)) {
-        throw 'Refusing to continue: check out a non-detached branch first.'
-    }
-    return $branch
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($branch)) { throw 'Refusing to continue: check out a non-detached branch first.' }
+    $prs = @((& $GhExe pr list --repo $Repo --head $branch --state open --limit 2 --json state,isDraft,headRefName,headRefOid 2>&1 | ConvertFrom-Json))
+    if ($LASTEXITCODE -ne 0 -or $prs.Count -ne 1 -or [bool]$prs[0].isDraft -or [string]$prs[0].state -ine 'OPEN' -or [string]$prs[0].headRefName -ne $branch -or [string]$prs[0].headRefOid -ine $finalSha) { throw 'Refusing to continue: one open, ready, exact-head pull request is required.' }
+    return $finalSha
 }
-
-function Assert-ReadyPullRequest([string]$GhExe, [string]$Branch, [string]$FinalSha) {
-    $raw = (& $GhExe pr list --repo $Repo --head $Branch --state open --limit 2 --json number,state,isDraft,headRefName,headRefOid 2>&1 | Out-String)
-    if ($LASTEXITCODE -ne 0) { throw 'Unable to query the open pull request for the current branch.' }
-    $pullRequests = @($raw | ConvertFrom-Json)
-    if ($pullRequests.Count -ne 1) {
-        throw 'Refusing to continue: the current branch must have exactly one open pull request.'
-    }
-    $pullRequest = $pullRequests[0]
-    if (
-        [string]$pullRequest.state -ine 'OPEN' -or
-        [bool]$pullRequest.isDraft -or
-        [string]$pullRequest.headRefName -ne $Branch
-    ) {
-        throw 'Refusing to continue: the pull request must be open, ready for review, and belong to the current branch.'
-    }
-    $headRefOid = [string]$pullRequest.headRefOid
-    if (
-        $headRefOid -notmatch '^[0-9a-fA-F]{40}$' -or
-        -not [string]::Equals($headRefOid, $FinalSha, [System.StringComparison]::OrdinalIgnoreCase)
-    ) {
-        throw 'Refusing to continue: the pull request head must be the complete local HEAD SHA.'
-    }
-}
-
-function Resolve-ArtifactRuns([string]$GhExe, [string]$FinalSha) {
-    $raw = (& $GhExe run list --repo $Repo --workflow $Workflow --commit $FinalSha --limit 20 --json databaseId,headSha,createdAt,status,conclusion 2>&1 | Out-String)
-    if ($LASTEXITCODE -ne 0) { throw "Unable to list $Workflow runs: $raw" }
-    $runs = @(
-        $raw | ConvertFrom-Json |
-            Where-Object { [string]$_.headSha -eq $FinalSha } |
-            Sort-Object createdAt -Descending
-    )
-    if ($runs.Count -lt 1) {
-        throw "No $Workflow run exists for local HEAD $FinalSha; refusing to use another artifact."
-    }
-    $latestRun = $runs[0]
-    if ([string]$latestRun.status -ine 'completed' -or [string]$latestRun.conclusion -ine 'success') {
-        throw "The latest $Workflow run for local HEAD $FinalSha is not completed successfully."
-    }
-    $run = [string]$latestRun.databaseId
-    $artifactRaw = (& $GhExe api "repos/$Repo/actions/runs/$run/artifacts?per_page=100" 2>&1 | Out-String)
-    if ($LASTEXITCODE -ne 0) { throw "Unable to list artifacts for run ${run}: $artifactRaw" }
-    $artifactResponse = $artifactRaw | ConvertFrom-Json
-    $availableArtifacts = @($artifactResponse.artifacts | Where-Object { -not [bool]$_.expired })
-    foreach ($item in $Items) {
-        $prefix = "esp-idf-$($item.Version)-$($item.Name)-esp32p4-"
-        $namePattern = '^' + [regex]::Escape($prefix) + '([0-9a-fA-F]{40})$'
-        $matches = @($availableArtifacts | Where-Object { [string]$_.name -match $namePattern })
-        if ($matches.Count -ne 1) {
-            throw "Expected exactly one non-expired artifact matching $prefix<ci-build-sha> in run $run."
+function Resolve-ArtifactRuns($SelectedItems, [string]$GhExe, [string]$FinalSha) {
+    foreach ($group in @($SelectedItems | Group-Object Workflow)) {
+        $raw = (& $GhExe run list --repo $Repo --workflow $group.Name --commit $FinalSha --limit 20 --json databaseId,headSha,createdAt,status,conclusion 2>&1 | Out-String)
+        if ($LASTEXITCODE -ne 0) { throw "Unable to list $($group.Name) runs: $raw" }
+        $runs = @($raw | ConvertFrom-Json | Where-Object { [string]$_.headSha -ieq $FinalSha } | Sort-Object createdAt -Descending)
+        if ($runs.Count -lt 1 -or [string]$runs[0].status -ine 'completed' -or [string]$runs[0].conclusion -ine 'success') { throw "Latest $($group.Name) exact-final-SHA run is not successful." }
+        $run = [string]$runs[0].databaseId
+        $artifacts = @(((& $GhExe api "repos/$Repo/actions/runs/$run/artifacts?per_page=100" 2>&1 | ConvertFrom-Json).artifacts) | Where-Object { -not [bool]$_.expired })
+        foreach ($item in $group.Group) {
+            $matches = @($artifacts | Where-Object { [string]$_.name -match ('^' + [regex]::Escape($item.Prefix) + [regex]::Escape($FinalSha) + '$') })
+            if ($matches.Count -ne 1) { throw "Expected one non-expired exact profile-qualified artifact $($item.Prefix)$FinalSha." }
+            $item.Artifact = [string]$matches[0].name; $item.BuildSha = Get-ArtifactBuildSha $item.Artifact $item.Prefix; $item.Run = $run
+            if ($item.BuildSha -ne $FinalSha) { throw 'Artifact SHA is not the final HEAD SHA.' }
         }
-        $artifactName = [string]$matches[0].name
-        $item.Artifact = $artifactName
-        $item.BuildSha = Get-ArtifactBuildSha $artifactName $prefix
-        $item | Add-Member -NotePropertyName Run -NotePropertyValue $run -Force
     }
-    $buildShas = @($Items.BuildSha | Sort-Object -Unique)
-    if ($buildShas.Count -ne 1) {
-        throw "Artifacts in run $run do not share one CI build SHA."
-    }
+}
+function Test-HashVerificationOutput([string]$Output, [int]$ExpectedSegments, [int]$ExitCode) {
+    if ($ExitCode -ne 0) { throw "Flash command exited with $ExitCode." }
+    $verified = @([regex]::Matches($Output, '(?im)^Hash of data verified\.?\s*$'))
+    if ($verified.Count -lt $ExpectedSegments) { throw "esptool reported $($verified.Count) hash-verification lines for $ExpectedSegments planned flash segments." }
 }
 
 function Ensure-StateRoot {
@@ -504,41 +293,15 @@ function Ensure-StateRoot {
     }
 }
 
-function Read-State([string]$FinalSha, [string]$BuildSha) {
-    $saved = if (Test-Path -LiteralPath $StatePath) {
-        Get-Content -LiteralPath $StatePath -Raw | ConvertFrom-Json
-    } else {
-        $null
-    }
-    return Get-StateForBuild $saved $FinalSha $BuildSha $Port
-}
-
-function Save-State(
-    [int]$CurrentIndex,
-    [int[]]$ConfirmedIndexes,
-    [string]$SavedPort,
-    [string]$FinalSha,
-    [string]$BuildSha
-) {
-    Ensure-StateRoot
-    [pscustomobject]@{
-        CurrentIndex = $CurrentIndex
-        ConfirmedIndexes = @($ConfirmedIndexes | Sort-Object -Unique)
-        Port = $SavedPort
-        UpdatedAt = (Get-Date).ToString('o')
-        Repository = $Repo
-        FinalSha = $FinalSha
-        BuildSha = $BuildSha
-    } | ConvertTo-Json | Set-Content -LiteralPath $StatePath -Encoding UTF8
-}
-
 function New-RunPaths {
     Ensure-StateRoot
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
     $downloadRoot = Join-Path $StateRoot 'downloads'
     $logRoot = Join-Path $StateRoot 'logs'
-    foreach ($dir in @($downloadRoot, $logRoot)) {
-        if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
+    foreach ($directory in @($downloadRoot, $logRoot)) {
+        if (-not (Test-Path -LiteralPath $directory)) {
+            New-Item -ItemType Directory -Path $directory | Out-Null
+        }
     }
     $downloadDir = Join-Path $downloadRoot $stamp
     $logPath = Join-Path $logRoot ($stamp + '.log')
@@ -554,226 +317,135 @@ function Add-RunLog([string]$Path, [string]$Text) {
     Add-Content -LiteralPath $Path -Value $Text -Encoding UTF8
 }
 
-function Find-PackageDirectory([string]$DownloadDir) {
-    $zips = @(Get-ChildItem -LiteralPath $DownloadDir -Recurse -File -Filter '*.zip')
-    foreach ($zip in $zips) {
-        $destination = Join-Path $zip.DirectoryName ($zip.BaseName + '-unzipped')
-        if (Test-Path -LiteralPath $destination) {
-            throw "Refusing to overwrite extraction directory: $destination"
-        }
-        Expand-Archive -LiteralPath $zip.FullName -DestinationPath $destination -ErrorAction Stop
-    }
-    $manifests = @(Get-ChildItem -LiteralPath $DownloadDir -Recurse -File -Filter 'manifest.json')
-    if ($manifests.Count -ne 1) {
-        throw 'Expected exactly one manifest.json in the downloaded artifact.'
-    }
-    return $manifests[0].DirectoryName
-}
-
-function Invoke-CurrentFlash(
-    $Item,
-    [string]$SelectedPort,
-    [string]$GhExe,
-    [string]$PythonExe,
-    [string]$WriteOperation,
-    [string]$FinalSha
-) {
+function Invoke-FlashItem($Item, $State, [string]$StateFile, [string]$FlashPort, [string]$PythonExe, [string]$GhExe, [string]$WriteOperation) {
     $paths = New-RunPaths
-    Add-RunLog $paths.LogPath "finalSHA=$FinalSha buildSHA=$($Item.BuildSha) index=$($Item.Index) artifact=$($Item.Artifact) run=$($Item.Run) port=$SelectedPort"
-    $downloadOutput = (& $GhExe run download $Item.Run --repo $Repo --name $Item.Artifact --dir $paths.DownloadDir 2>&1 | Out-String)
-    $downloadExit = $LASTEXITCODE
-    Add-RunLog $paths.LogPath $downloadOutput
-    if ($downloadExit -ne 0) {
-        throw "Artifact download failed with exit code $downloadExit. Log: $($paths.LogPath)"
-    }
-    $packageDir = Find-PackageDirectory $paths.DownloadDir
-    $plan = Test-PackageManifest $packageDir $Item $Item.BuildSha
-    $flashArguments = @(
-        '-m', 'esptool', '--port', $SelectedPort, '--chip', $ExpectedTarget,
-        '--baud', [string]$ExpectedBaud, $WriteOperation
-    )
-    foreach ($entry in $plan) {
-        $flashArguments += ('0x{0:X}' -f $entry.Offset)
-        $flashArguments += $entry.Path
-    }
-    $flashOutput = (& $PythonExe @flashArguments 2>&1 | Out-String)
-    $flashExit = $LASTEXITCODE
-    Add-RunLog $paths.LogPath $flashOutput
-    $verified = ($flashExit -eq 0) -and $flashOutput.Contains('Hash of data verified')
-    return [pscustomobject]@{
-        Success = $verified
-        Output = $flashOutput
-        LogPath = $paths.LogPath
-        Detail = if ($verified) {
-            'Flash completed and Hash of data verified was found.'
-        } else {
-            'Flash did not meet the required exit-code and hash-verification condition.'
-        }
-    }
-}
-
-$GitExe = Resolve-Git
-$FinalSha = Resolve-FinalSha $GitExe
-Assert-CleanWorktree $GitExe
-$Branch = Resolve-CurrentBranch $GitExe
-$GhExe = Resolve-Gh
-Assert-ReadyPullRequest $GhExe $Branch $FinalSha
-$PythonExe = Resolve-PythonWithEsptool
-$EsptoolWriteOperation = Resolve-EsptoolWriteOperation $PythonExe
-if ([string]::IsNullOrWhiteSpace($Port)) { $Port = Resolve-DefaultPort }
-$Port = $Port.Trim().ToUpperInvariant()
-if (-not (Test-Port $Port)) {
-    throw 'Port must be COM followed by digits, for example COM6.'
-}
-Resolve-ArtifactRuns $GhExe $FinalSha
-$CiBuildSha = [string]$Items[0].BuildSha
-
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
-$state = Read-State $FinalSha $CiBuildSha
-$script:CurrentIndex = $state.CurrentIndex
-$script:ConfirmedIndexes = @($state.ConfirmedIndexes)
-$script:CurrentFlashVerified = $false
-
-$form = New-Object System.Windows.Forms.Form
-$form.Text = 'ESP32-P4 CI Firmware Flasher'
-$form.StartPosition = 'CenterScreen'
-$form.ClientSize = New-Object System.Drawing.Size(900, 700)
-$form.FormBorderStyle = 'FixedDialog'
-$form.MaximizeBox = $false
-
-function Add-Label([string]$Text, [int]$X, [int]$Y, [int]$Width = 860) {
-    $label = New-Object System.Windows.Forms.Label
-    $label.Text = $Text
-    $label.Location = New-Object System.Drawing.Point($X, $Y)
-    $label.Size = New-Object System.Drawing.Size($Width, 20)
-    $form.Controls.Add($label)
-    return $label
-}
-
-$repoLabel = Add-Label "Repository: $Repo" 15 15
-$shaLabel = Add-Label "Final SHA: $FinalSha" 15 40
-$boundaryLabel = Add-Label 'ESP32-P4 host firmware only; this tool does not update the ESP32-C6 hosted coprocessor.' 15 65
-$portCaption = Add-Label 'Port:' 15 95 45
-$portBox = New-Object System.Windows.Forms.TextBox
-$portBox.Text = $state.Port
-$portBox.Location = New-Object System.Drawing.Point(65, 92)
-$portBox.Size = New-Object System.Drawing.Size(110, 22)
-$form.Controls.Add($portBox)
-$currentLabel = Add-Label '' 15 125
-$statusLabel = Add-Label 'Status: Select Flash current to begin.' 15 150
-$progressList = New-Object System.Windows.Forms.ListBox
-$progressList.Font = New-Object System.Drawing.Font('Consolas', 9)
-$progressList.Location = New-Object System.Drawing.Point(15, 180)
-$progressList.Size = New-Object System.Drawing.Size(870, 250)
-$form.Controls.Add($progressList)
-$outputBox = New-Object System.Windows.Forms.TextBox
-$outputBox.Multiline = $true
-$outputBox.ReadOnly = $true
-$outputBox.ScrollBars = 'Both'
-$outputBox.WordWrap = $false
-$outputBox.Font = New-Object System.Drawing.Font('Consolas', 9)
-$outputBox.Location = New-Object System.Drawing.Point(15, 440)
-$outputBox.Size = New-Object System.Drawing.Size(870, 200)
-$form.Controls.Add($outputBox)
-$flashButton = New-Object System.Windows.Forms.Button
-$flashButton.Text = 'Flash current'
-$flashButton.Location = New-Object System.Drawing.Point(15, 655)
-$flashButton.Size = New-Object System.Drawing.Size(145, 32)
-$form.Controls.Add($flashButton)
-$confirmButton = New-Object System.Windows.Forms.Button
-$confirmButton.Text = 'Mark PASS and flash next'
-$confirmButton.Location = New-Object System.Drawing.Point(170, 655)
-$confirmButton.Size = New-Object System.Drawing.Size(215, 32)
-$confirmButton.Enabled = $false
-$form.Controls.Add($confirmButton)
-$exitButton = New-Object System.Windows.Forms.Button
-$exitButton.Text = 'Exit'
-$exitButton.Location = New-Object System.Drawing.Point(765, 655)
-$exitButton.Size = New-Object System.Drawing.Size(120, 32)
-$form.Controls.Add($exitButton)
-
-function Update-CurrentDisplay {
-    $item = $Items[$script:CurrentIndex - 1]
-    $currentLabel.Text = "Current: $($item.Index)/$($Items.Count) Artifact: $($item.Artifact) Run: $($item.Run)"
-    $progressList.Items.Clear()
-    foreach ($progressItem in $Items) {
-        $prefix = if ($script:ConfirmedIndexes -contains $progressItem.Index) {
-            '[PASS]'
-        } elseif ($progressItem.Index -eq $script:CurrentIndex) {
-            '[CURRENT]'
-        } else {
-            '[WAIT]'
-        }
-        [void]$progressList.Items.Add(('{0} {1}: {2}' -f $prefix, $progressItem.Index, $progressItem.Artifact))
-    }
-    $progressList.SelectedIndex = $script:CurrentIndex - 1
-}
-
-function Set-Busy([bool]$Busy) {
-    $complete = $script:CurrentIndex -eq $Items.Count -and $script:ConfirmedIndexes -contains $Items.Count
-    $flashButton.Enabled = (-not $Busy) -and (-not $complete)
-    $confirmButton.Enabled = (-not $Busy) -and $script:CurrentFlashVerified -and (-not $complete)
-    $exitButton.Enabled = -not $Busy
-    $portBox.Enabled = -not $Busy
-    $form.UseWaitCursor = $Busy
-    [System.Windows.Forms.Application]::DoEvents()
-}
-
-function Flash-CurrentItem {
-    $selectedPort = $portBox.Text.Trim().ToUpperInvariant()
-    if (-not (Test-Port $selectedPort)) {
-        [System.Windows.Forms.MessageBox]::Show('Port must be COM followed by digits, for example COM6.', 'Invalid port') | Out-Null
-        return
-    }
-    $script:CurrentFlashVerified = $false
-    Set-Busy $true
-    $item = $Items[$script:CurrentIndex - 1]
-    $statusLabel.Text = "Status: Flashing item $($item.Index) on $selectedPort..."
+    $attempt = New-ProgressRecord $Item $State 'started' $paths.LogPath
+    $State.Attempts = @($State.Attempts) + $attempt
+    Save-State $State $StateFile
+    Add-RunLog $paths.LogPath "buildSHA=$($Item.BuildSha) profile=$($Item.Profile) artifact=$($Item.Artifact) run=$($Item.Run) port=$FlashPort"
     try {
-        $result = Invoke-CurrentFlash $item $selectedPort $GhExe $PythonExe $EsptoolWriteOperation $FinalSha
-        $outputBox.Text = "Log: $($result.LogPath)`r`n`r`n$($result.Output)"
-        if ($result.Success) {
-            Save-State $script:CurrentIndex $script:ConfirmedIndexes $selectedPort $FinalSha $CiBuildSha
-            $statusLabel.Text = "Status: $($result.Detail) Check the device, then mark PASS to continue."
-            $script:CurrentFlashVerified = $true
-        } else {
-            $statusLabel.Text = "Status: $($result.Detail) Current item was not advanced. Log: $($result.LogPath)"
+        $silicon = Probe-Silicon $PythonExe $FlashPort
+        Assert-ProfileForSilicon $Item $silicon
+        Add-RunLog $paths.LogPath "silicon=$($silicon.Revision)"
+        $downloadOutput = (& $GhExe run download $Item.Run --repo $Repo --name $Item.Artifact --dir $paths.DownloadDir 2>&1 | Out-String)
+        $downloadExitCode = $LASTEXITCODE
+        Add-RunLog $paths.LogPath $downloadOutput
+        if ($downloadExitCode -ne 0) { throw "Artifact download failed with exit code $downloadExitCode." }
+        foreach ($archive in @(Get-ChildItem -LiteralPath $paths.DownloadDir -Recurse -Filter '*.zip')) {
+            $destination = Join-Path $archive.DirectoryName ($archive.BaseName + '-unzipped')
+            if (Test-Path -LiteralPath $destination) { throw "Refusing to overwrite extraction directory: $destination" }
+            Expand-Archive -LiteralPath $archive.FullName -DestinationPath $destination
         }
+        $manifests = @(Get-ChildItem -LiteralPath $paths.DownloadDir -Recurse -Filter manifest.json)
+        if ($manifests.Count -ne 1) { throw 'Expected exactly one package manifest.' }
+        $plan = @(Test-PackageManifest $manifests[0].DirectoryName $Item $Item.BuildSha)
+        $arguments = @('-m', 'esptool', '--port', $FlashPort, '--chip', $ExpectedTarget, '--baud', $ExpectedBaud, $WriteOperation)
+        foreach ($segment in $plan) { $arguments += ('0x{0:X}' -f $segment.Offset); $arguments += $segment.Path }
+        $output = (& $PythonExe @arguments 2>&1 | Out-String)
+        $flashExitCode = $LASTEXITCODE
+        Add-RunLog $paths.LogPath $output
+        Test-HashVerificationOutput $output $plan.Count $flashExitCode
+        $attempt.Status = 'success'; $attempt.TimestampUtc = [DateTime]::UtcNow.ToString('o')
+        Save-State $State $StateFile
+        return [pscustomobject]@{ Output = $output; LogPath = $paths.LogPath }
     }
     catch {
-        $outputBox.Text = $_ | Out-String
-        $statusLabel.Text = "Status: Error. Current item was not advanced. $($_.Exception.Message)"
+        Add-RunLog $paths.LogPath ($_ | Out-String)
+        $attempt.Status = 'failed'; $attempt.TimestampUtc = [DateTime]::UtcNow.ToString('o')
+        Save-State $State $StateFile
+        throw "$($_.Exception.Message) Log: $($paths.LogPath)"
     }
-    finally { Set-Busy $false }
 }
 
-$flashButton.Add_Click({ Flash-CurrentItem })
-$confirmButton.Add_Click({
-    if (-not $script:CurrentFlashVerified) { return }
-    $selectedPort = $portBox.Text.Trim().ToUpperInvariant()
-    $next = Get-NextProgress $script:CurrentIndex $script:ConfirmedIndexes $Items.Count
-    $script:CurrentIndex = $next.CurrentIndex
-    $script:ConfirmedIndexes = @($next.ConfirmedIndexes)
-    $script:CurrentFlashVerified = $false
-    Save-State $script:CurrentIndex $script:ConfirmedIndexes $selectedPort $FinalSha $CiBuildSha
-    Update-CurrentDisplay
-    if ($next.Completed) {
-        Set-Busy $false
-        $statusLabel.Text = "Status: All $($Items.Count) items are confirmed."
-        return
+function Invoke-SelfTest {
+    if ($Items.Count -ne 26 -or @($Items | Where-Object Profile -eq 'rev1_3').Count -ne 25 -or @($Items | Where-Object Profile -eq 'rev3_x').Count -ne 1) { throw 'SelfTest expected 25 rev1_3 and one rev3_x item.' }
+    if ((Parse-SiliconProbe 'Chip is ESP32-P4 (revision v1.3)').Profile -ne 'rev1_3' -or (Parse-SiliconProbe 'Chip is ESP32-P4 (revision v3.0)').Profile -ne 'rev3_x') { throw 'SelfTest silicon profile routing failed.' }
+    $sha = '0123456789abcdef0123456789abcdef01234567'; if ((Get-ArtifactBuildSha ($Items[0].Prefix + $sha) $Items[0].Prefix) -ne $sha) { throw 'SelfTest artifact SHA binding failed.' }
+    $reset = Get-StateForBuild ([pscustomobject]@{ StateVersion = 1; FinalSha = $sha; BuildSha = $sha; Profile = 'rev1_3' }) $sha $sha 'rev1_3' 'COM17' 25
+    if ($reset.CurrentIndex -ne 1) { throw 'SelfTest state version reset failed.' }
+    $root = Join-Path ([System.IO.Path]::GetTempPath()) ('waveshare-flasher-' + [guid]::NewGuid().ToString('N'))
+    try {
+        New-Item -ItemType Directory -Path $root | Out-Null
+        $saved = [pscustomobject]@{ StateVersion = $StateVersion; FinalSha = $sha; BuildSha = $sha; Profile = 'rev1_3'; Port = 'COM17'; CurrentIndex = 3; ConfirmedIndexes = @(1, 2) }
+        $samePort = Get-StateForBuild $saved $sha $sha 'rev1_3' 'COM17' 25
+        if ($samePort.CurrentIndex -ne 3 -or @($samePort.ConfirmedIndexes).Count -ne 2) { throw 'SelfTest same-port state recovery failed.' }
+        $otherPort = Get-StateForBuild $saved $sha $sha 'rev1_3' 'COM18' 25
+        $missingPort = Get-StateForBuild ([pscustomobject]@{ StateVersion = $StateVersion; FinalSha = $sha; BuildSha = $sha; Profile = 'rev1_3'; CurrentIndex = 3; ConfirmedIndexes = @(1, 2) }) $sha $sha 'rev1_3' 'COM17' 25
+        if ($otherPort.CurrentIndex -ne 1 -or @($otherPort.ConfirmedIndexes).Count -ne 0 -or $missingPort.CurrentIndex -ne 1) { throw 'SelfTest port-bound state reset failed.' }
+        $lastTransition = Get-NextProgress 25 @(1..24) 25
+        if (-not $lastTransition.Completed -or $lastTransition.CurrentIndex -ne 25 -or @($lastTransition.ConfirmedIndexes).Count -ne 25) { throw 'SelfTest final transition failed.' }
+        $legacyComplete = Get-StateForBuild ([pscustomobject]@{ StateVersion = $StateVersion; FinalSha = $sha; BuildSha = $sha; Profile = 'rev1_3'; Port = 'COM17'; CurrentIndex = 25; ConfirmedIndexes = @(1..25) }) $sha $sha 'rev1_3' 'COM17' 25
+        if (-not $legacyComplete.Completed -or $legacyComplete.CurrentIndex -ne -1) { throw 'SelfTest legacy completed-state derivation failed.' }
+        $roundTrip = Get-StateForBuild $saved $sha $sha 'rev1_3' 'COM17' 25
+        $roundTrip.Attempts = @(New-ProgressRecord $Items[0] $roundTrip 'success' 'logs/test.log')
+        $roundTrip.Results = @(New-ProgressRecord $Items[0] $roundTrip 'PASS' 'logs/test.log')
+        $statePath = Join-Path $root 'state.json'; Save-State $roundTrip $statePath
+        $persisted = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+        if ([bool]$persisted.Completed -ne $false -or @($persisted.Attempts).Count -ne 1 -or @($persisted.Results).Count -ne 1 -or [string]$persisted.Attempts[0].LogPath -ne 'logs/test.log') { throw 'SelfTest state JSON round-trip failed.' }
+        $bin = Join-Path $root 'bin'; New-Item -ItemType Directory -Path $bin | Out-Null
+        $one = Join-Path $bin 'one.bin'; $two = Join-Path $bin 'two.bin'; $p4Header = New-Object byte[] 24; $p4Header[0] = 0xE9; $p4Header[1] = 1; $p4Header[12] = 18; [System.IO.File]::WriteAllBytes($one, $p4Header); [System.IO.File]::WriteAllBytes($two, [byte[]](5, 6, 7, 8))
+        $item = $Items[0]; $manifest = [ordered]@{ schema_version = 2; artifact_kind = 'esp-idf-flashable'; profile = $item.Profile; host_only = $true; contains_c6_firmware = $false; name = $item.Name; framework = $item.Framework; framework_version = $item.Version; target = $ExpectedTarget; project_path = $item.SourceProject; git_sha = $sha; baud = $ExpectedBaud; files = @([ordered]@{ offset = '0x2000'; path = 'bin/one.bin'; size = 24; sha256 = Get-FileSha256 $one; image_chip_id = 18 }, [ordered]@{ offset = '0x10000'; path = 'bin/two.bin'; size = 4; sha256 = Get-FileSha256 $two; image_chip_id = $null }); flash_command = 'esptool write_flash' }
+        $manifestPath = Join-Path $root 'manifest.json'; $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+        if (@(Test-PackageManifest $root $item $sha).Count -ne 2) { throw 'SelfTest did not hash-verify every planned segment.' }
+        Test-HashVerificationOutput "Hash of data verified.`nHash of data verified." 2 0
+        $insufficientHashOutput = $false; try { Test-HashVerificationOutput 'Hash of data verified.' 2 0 } catch { $insufficientHashOutput = $true }; if (-not $insufficientHashOutput) { throw 'SelfTest accepted incomplete hash-verification output.' }
+        $manifest.flash_command = 'esptool --erase-all write_flash'; $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+        $rejected = $false; try { [void](Test-PackageManifest $root $item $sha) } catch { $rejected = $true }; if (-not $rejected) { throw 'SelfTest did not reject --erase-all.' }
     }
-    Flash-CurrentItem
-})
-$exitButton.Add_Click({ $form.Close() })
-$progressList.Add_SelectedIndexChanged({
-    if ($progressList.SelectedIndex -ne ($script:CurrentIndex - 1)) {
-        $progressList.SelectedIndex = $script:CurrentIndex - 1
-    }
-})
-Update-CurrentDisplay
-if ($script:CurrentIndex -eq $Items.Count -and $script:ConfirmedIndexes -contains $Items.Count) {
-    Set-Busy $false
-    $statusLabel.Text = "Status: All $($Items.Count) items are confirmed."
+    finally { if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force } }
+    Write-Output 'SELF_TEST_OK items=26 rev1_3=25 rev3_x=1 hashVerifiedSegments=2 eraseAllRejected=true stateVersionReset=true portBoundRecovery=true completedTransition=true jsonRoundTrip=true'
 }
+
+if ($SelfTest) { Invoke-SelfTest; return }
+if ($ListOnly) {
+    Write-Output 'finalSHA=resolved-at-runtime'; Write-Output 'port=probed-and-locked-at-runtime'
+    foreach ($item in $Items) { Write-Output ('{0}: workflow={1} profile={2} artifact={3} project={4}' -f $item.Index, $item.Workflow, $item.Profile, $item.Artifact, $item.SourceProject) }
+    return
+}
+
+$RepoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$StateRoot = Join-Path $env:LOCALAPPDATA 'Waveshare\ESP32-P4-WIFI6-Touch-LCD-3.5\ci-firmware'
+$StatePath = Join-Path $StateRoot 'state-v2.json'
+$git = Resolve-Git; $gh = Resolve-Gh; $finalSha = Assert-LocalAndPullRequest $git $gh $RepoRoot
+$python = Resolve-PythonWithEsptool; $writeOperation = Resolve-EsptoolWriteOperation $python
+if ([string]::IsNullOrWhiteSpace($Port)) { $Port = Resolve-DefaultPort }; $Port = $Port.Trim().ToUpperInvariant()
+if (-not (Test-Port $Port)) { throw 'Port must be COM followed by digits.' }
+$silicon = Probe-Silicon $python $Port
+$selectedItems = @($Items | Where-Object { $_.Profile -eq $silicon.Profile })
+Resolve-ArtifactRuns $selectedItems $gh $finalSha
+$buildSha = @($selectedItems.BuildSha | Sort-Object -Unique); if ($buildSha.Count -ne 1 -or $buildSha[0] -ne $finalSha) { throw 'All selected artifacts must use the final HEAD SHA.' }
+if (-not (Test-Path -LiteralPath $StateRoot)) { New-Item -ItemType Directory -Path $StateRoot | Out-Null }
+$saved = if (Test-Path -LiteralPath $StatePath) { Get-Content -LiteralPath $StatePath -Raw | ConvertFrom-Json } else { $null }
+$state = Get-StateForBuild $saved $finalSha $buildSha[0] $silicon.Profile $Port $selectedItems.Count
+
+Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing
+$form = New-Object System.Windows.Forms.Form; $form.Text = "ESP32-P4 CI Firmware Flasher ($($silicon.Revision), $($silicon.Profile), $Port)"; $form.ClientSize = New-Object System.Drawing.Size(840, 480)
+$list = New-Object System.Windows.Forms.ListBox; $list.Location = New-Object System.Drawing.Point(10, 10); $list.Size = New-Object System.Drawing.Size(820, 330)
+$flashButton = New-Object System.Windows.Forms.Button; $flashButton.Text = 'Flash current'; $flashButton.Location = New-Object System.Drawing.Point(10, 375)
+$passButton = New-Object System.Windows.Forms.Button; $passButton.Text = 'Mark PASS and flash next'; $passButton.Location = New-Object System.Drawing.Point(150, 375); $passButton.Enabled = $false
+$status = New-Object System.Windows.Forms.Label; $status.Location = New-Object System.Drawing.Point(10, 425); $status.Size = New-Object System.Drawing.Size(820, 25)
+$form.Controls.AddRange(@($list, $flashButton, $passButton, $status)); $script:currentIndex = $state.CurrentIndex; $script:lastFlashSucceeded = $false; $script:lastSuccessfulLogPath = ''
+function Update-View {
+    $list.Items.Clear(); for ($i = 0; $i -lt $selectedItems.Count; $i++) { $marker = if (-not $state.Completed -and $i + 1 -eq $script:currentIndex) { '[CURRENT]' } elseif ($state.ConfirmedIndexes -contains ($i + 1)) { '[PASS]' } else { '[WAIT]' }; [void]$list.Items.Add(('{0} {1}: {2}' -f $marker, $i + 1, $selectedItems[$i].Artifact)) }
+    if (-not $state.Completed -and $script:currentIndex -ge 1 -and $script:currentIndex -le $selectedItems.Count) { $list.SelectedIndex = $script:currentIndex - 1 } else { $list.SelectedIndex = -1 }
+}
+$flashButton.Add_Click({
+    if ($state.Completed -or $script:currentIndex -lt 1 -or $script:currentIndex -gt $selectedItems.Count) { return }
+    $flashButton.Enabled = $false; $passButton.Enabled = $false; $form.UseWaitCursor = $true; $status.Text = 'Flashing after a fresh silicon probe...'; $form.Refresh()
+    try { $result = Invoke-FlashItem $selectedItems[$script:currentIndex - 1] $state $StatePath $Port $python $gh $writeOperation; $script:lastFlashSucceeded = $true; $script:lastSuccessfulLogPath = $result.LogPath; $passButton.Enabled = $true; $status.Text = "Flash completed. Confirm board behavior, then select Mark PASS. Log: $($result.LogPath)"; [System.Windows.Forms.MessageBox]::Show("Log: $($result.LogPath)`r`n`r`n$($result.Output)", 'Flash output') | Out-Null }
+    catch { $script:lastFlashSucceeded = $false; $status.Text = 'Flash failed; no progress was recorded.'; [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Flash failed') | Out-Null }
+    finally { $flashButton.Enabled = -not $state.Completed -and $script:currentIndex -ge 1 -and $script:currentIndex -le $selectedItems.Count; $form.UseWaitCursor = $false }
+})
+$passButton.Add_Click({
+    if ($state.Completed -or -not $script:lastFlashSucceeded -or $script:currentIndex -lt 1 -or $script:currentIndex -gt $selectedItems.Count) { return }
+    $next = Get-NextProgress $script:currentIndex $state.ConfirmedIndexes $selectedItems.Count; $state.CurrentIndex = $next.CurrentIndex; $state.ConfirmedIndexes = $next.ConfirmedIndexes
+    $state.Completed = $next.Completed
+    if ($state.Completed) { $state.CurrentIndex = -1 }
+    $state.Results = @($state.Results) + (New-ProgressRecord $selectedItems[$script:currentIndex - 1] $state 'PASS' $script:lastSuccessfulLogPath)
+    Save-State $state $StatePath
+    $script:currentIndex = $state.CurrentIndex; $script:lastFlashSucceeded = $false; $passButton.Enabled = $false
+    if ($next.Completed) { $flashButton.Enabled = $false; $status.Text = 'All profile-qualified items were marked PASS.'; Update-View } else { $status.Text = 'Progress saved. Flash the next item when ready.'; Update-View }
+})
+Update-View
+if ($state.Completed) { $flashButton.Enabled = $false; $passButton.Enabled = $false; $status.Text = 'All profile-qualified items were already marked PASS.' }
 [void]$form.ShowDialog()

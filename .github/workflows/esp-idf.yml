@@ -32,11 +32,13 @@ jobs:
       docs-only: ${{ steps.routing.outputs.docs_only }}
       firmware-touched: ${{ steps.routing.outputs.firmware_touched }}
       release-review-required: ${{ steps.routing.outputs.release_review_required }}
+      product-firmware-required: ${{ steps.routing.outputs.product_firmware_required }}
       unknown-count: ${{ steps.routing.outputs.unknown_count }}
     steps:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
       - name: Route changed files
@@ -45,7 +47,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
           EVENT_NAME: ${{ github.event_name }}
           EXAMPLE_SELECTOR: ${{ inputs.example || 'all' }}
-          HEAD_SHA: ${{ github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             python3 scripts/ci/classify_changes.py \
@@ -86,6 +88,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - name: Restore component and compiler caches
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -107,18 +110,24 @@ jobs:
             -e CCACHE_DIR=/app/${{ github.repository }}/.ci-cache/ccache/${{ matrix.idf }}/${{ matrix.example.name }}
             -e CCACHE_MAXSIZE=200M
             -e CCACHE_COMPRESS=1
-          command: idf.py --version && idf.py set-target esp32p4 && idf.py build
+          command: >-
+            idf.py --version &&
+            idf.py -B build-rev1_3 -D SDKCONFIG=sdkconfig.rev1_3 -D WAVESHARE_REVISION_PROFILE=rev1_3 set-target esp32p4 &&
+            idf.py -B build-rev1_3 -D SDKCONFIG=sdkconfig.rev1_3 -D WAVESHARE_REVISION_PROFILE=rev1_3 build
       - name: Package flashable firmware
         run: >-
           python3 scripts/ci/package_esp_idf.py
           --project "${{ matrix.example.path }}"
           --idf-version "${{ matrix.idf }}"
           --target esp32p4
+          --git-sha "${{ github.event.pull_request.head.sha || github.sha }}"
+          --profile rev1_3
+          --build-dir build-rev1_3
       - name: Upload flashable firmware
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: esp-idf-${{ matrix.idf }}-${{ matrix.example.name }}-esp32p4-${{ github.sha }}
-          path: ci-artifacts/${{ matrix.idf }}-${{ matrix.example.name }}
+          name: esp-idf-${{ matrix.idf }}-${{ matrix.example.name }}-esp32p4-rev1_3-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ci-artifacts/${{ matrix.idf }}-${{ matrix.example.name }}-rev1_3
           if-no-files-found: error
           retention-days: 14
 

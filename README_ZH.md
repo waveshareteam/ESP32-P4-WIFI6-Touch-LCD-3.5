@@ -79,15 +79,19 @@ Wi-Fi 示例通过 ESP32-C6 协处理器通信。调整相关依赖时，请保�
 | [11_esp_brookesia_phone](examples/esp-idf/11_esp_brookesia_phone/) | ESP-Brookesia 手机风格界面 |
 | [12_esp32-p4-eye](examples/esp-idf/12_esp32-p4-eye/) | 摄像、相册和端侧视觉示例 |
 
-本仓库目前不包含 Arduino 示例。
+本仓库目前不包含 Arduino 示例。Arduino 清单为零，不会将 Arduino 构建表述为通过；若以后
+加入该表面，默认策略为 `ChipVariant=prev3`。
 
 ## ✅ 持续集成
 
 [ESP-IDF 示例工作流](.github/workflows/esp-idf.yml)会动态发现
 `examples/esp-idf/` 下的所有直接子工程，并对完整 Git diff 分类。单工程源码修改只构建
 受影响工程；共享文件、工作流或未知构建输入会选择全部工程。文档和治理修改仍会报告
-稳定的 CI 门禁，但跳过固件矩阵。每个被选工程都针对 `esp32p4` 使用 ESP-IDF v5.5.5
-和 v6.0.2 编译。
+稳定的 CI 门禁，但跳过固件矩阵。标准矩阵仍为 12 个工程 × ESP-IDF v5.5.5/v6.0.2 =
+24 次构建，且全部使用 v3 前的 `rev1_3` 配置，不会为每个芯片版本配置翻倍。维护的产品
+源码 `12_esp32-p4-eye` 还会在 IDF v6.0.2 上生成带配置标识的 `rev1_3` 与 `rev3_x`
+产品任务/制品；两种配置使用独立 sdkconfig/构建目录，二进制互不兼容。确切配置和烧录
+保护见 [CI 说明](docs/ci_ZH.md)。
 
 每个成功的矩阵任务都会根据该工程的 `flasher_args.json` 上传可刷写制品，仓库
 `firmware/` 下已有的预编译镜像不会混入 CI 产物。项目选择、版本更新、制品内容和
@@ -112,7 +116,7 @@ Wi-Fi 示例通过 ESP32-C6 协处理器通信。调整相关依赖时，请保�
 | [`assets/`](assets/) | 文档使用的产品图片 |
 | [`example/`](example/) | 原示例路径的兼容迁移说明 |
 | [`docs/`](docs/) | CI、组件与维护策略 |
-| [`.github/workflows/`](.github/workflows/) | ESP-IDF 构建与文档检查 |
+| [`.github/workflows/`](.github/workflows/) | 示例、产品固件、仓库策略与文档 CI |
 | [`scripts/`](scripts/) | CI 发现、制品打包与文档验证辅助脚本 |
 
 ## 📚 文档与支持
@@ -130,7 +134,7 @@ Wi-Fi 示例通过 ESP32-C6 协处理器通信。调整相关依赖时，请保�
 相关串口日志。联系 Waveshare 获取产品支持时，也请提供订单号。
 
 Actions 通过只代表编译与打包证据，并非板级功能证明。显示、触摸、摄像头、音频、存储、
-USB、电源以及 ESP32-C6 hosted Wi-Fi 仍必须在目标硬件上验证。
+USB、电源以及 ESP32-C6 hosted Wi-Fi 仍必须在目标硬件上验证；本仓库不作硬件验证声明。
 
 ## 📄 许可证
 

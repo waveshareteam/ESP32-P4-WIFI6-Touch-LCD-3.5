@@ -1,6 +1,10 @@
 dependencies:
   idf: ">=5.4"
 
+  waveshare/esp32_p4_wifi6_touch_lcd_3_5:
+    version: "==2.0.0"
+    public: true
+
   esp_video:
     matches:
       - if: "idf_version >=6.0"

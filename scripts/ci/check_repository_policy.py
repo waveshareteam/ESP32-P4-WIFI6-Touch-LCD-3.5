@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""Deterministic repository policy checks for revision-profile CI contracts."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+EXAMPLES = ROOT / "examples" / "esp-idf"
+PROFILE_CONFIG = ROOT / "config" / "revision-profiles.json"
+
+
+def load_policy() -> dict[str, object]:
+    return json.loads(PROFILE_CONFIG.read_text(encoding="utf-8"))
+
+
+def project_roots() -> list[Path]:
+    return sorted(path.parent for path in EXAMPLES.glob("*/CMakeLists.txt"))
+
+
+def parse_sdkconfig(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("CONFIG_") and "=" in line:
+            key, value = line.split("=", 1)
+            values[key] = value.strip().strip('"')
+    return values
+
+
+def check_arduino(policy: dict[str, object]) -> list[str]:
+    arduino = policy["arduino"]
+    expected = arduino["expected_sketch_count"]
+    sketches = list((ROOT / "examples" / "arduino").glob("**/*.ino")) if (ROOT / "examples" / "arduino").exists() else []
+    errors = []
+    if len(sketches) != expected:
+        errors.append(f"Arduino sketch count is {len(sketches)}, expected {expected}")
+    if arduino["default_chip_variant"] != "prev3":
+        errors.append("Arduino default ChipVariant must be prev3")
+    return errors
+
+
+def check_profiles(policy: dict[str, object]) -> list[str]:
+    profiles = policy["profiles"]
+    roots = project_roots()
+    errors: list[str] = []
+    if len(roots) != 12:
+        errors.append(f"expected 12 ESP-IDF roots, found {len(roots)}")
+    for project in roots:
+        cmake = (project / "CMakeLists.txt").read_text(encoding="utf-8")
+        if "config/revision_profiles.cmake" not in cmake or "waveshare_configure_revision_profile" not in cmake:
+            errors.append(f"{project.relative_to(ROOT)} does not include the central revision profile")
+        for profile, expected in profiles.items():
+            values = parse_sdkconfig(project / f"sdkconfig.defaults.{profile}")
+            if values != expected:
+                errors.append(f"{project.relative_to(ROOT)}/sdkconfig.defaults.{profile} does not exactly match policy")
+    if policy["default_profile"] != "rev1_3":
+        errors.append("default revision profile must be rev1_3")
+    return errors
+
+
+def check_bsp(policy: dict[str, object]) -> list[str]:
+    bsp = policy["official_bsp"]
+    local_name = bsp["local_directory"]
+    # Git does not preserve empty directories; ignore empty remnants of a pending
+    # migration deletion while rejecting any checked-in local BSP source content.
+    local_dirs = [
+        path for path in EXAMPLES.glob(f"**/{local_name}")
+        if path.is_dir() and any(candidate.is_file() for candidate in path.rglob("*"))
+    ]
+    errors = []
+    if local_dirs:
+        errors.append("obsolete local official BSP directories remain: " + ", ".join(str(path.relative_to(ROOT)) for path in local_dirs))
+    dependency = re.escape(bsp["dependency"])
+    version = re.escape(bsp["version"])
+    pattern = re.compile(dependency + r"\s*:\s*\n\s*version:\s*[\"']?" + version)
+    manifests = list(EXAMPLES.glob("**/idf_component.yml"))
+    matching = [path for path in manifests if pattern.search(path.read_text(encoding="utf-8"))]
+    if not matching:
+        errors.append("official BSP dependency/version is not present in any manifest")
+    for path in manifests:
+        text = path.read_text(encoding="utf-8")
+        if bsp["dependency"] in text and not pattern.search(text):
+            errors.append(f"{path.relative_to(ROOT)} does not pin the official BSP to {bsp['version']}")
+    return errors
+
+
+def check_workflows() -> list[str]:
+    errors = []
+    examples = (ROOT / ".github" / "workflows" / "esp-idf.yml").read_text(encoding="utf-8")
+    product = (ROOT / ".github" / "workflows" / "product-firmware.yml").read_text(encoding="utf-8")
+    arduino = (ROOT / ".github" / "workflows" / "arduino-policy.yml").read_text(encoding="utf-8")
+    docs = (ROOT / ".github" / "workflows" / "docs.yml").read_text(encoding="utf-8")
+    repository_policy = (ROOT / ".github" / "workflows" / "repository-policy.yml").read_text(encoding="utf-8")
+    exact_head = "${{ github.event.pull_request.head.sha || github.sha }}"
+    required_example = ("v5.5.5", "v6.0.2", "-B build-rev1_3 -D SDKCONFIG=sdkconfig.rev1_3", "--profile rev1_3", "--build-dir build-rev1_3", "esp32p4-rev1_3-")
+    if any(token not in examples for token in required_example):
+        errors.append("ESP-IDF example workflow is missing the rev1_3 12x2 contract")
+    if examples.count(f"ref: {exact_head}") < 2 or examples.count(exact_head) < 5 or "--git-sha" not in examples:
+        errors.append("ESP-IDF workflow must check out and package the exact final head SHA")
+    required_product = ("examples/esp-idf/12_esp32-p4-eye", "v6.0.2", "-B build-${{ matrix.profile }} -D SDKCONFIG=sdkconfig.${{ matrix.profile }}", "rev1_3", "rev3_x", "retention-days: 14")
+    if any(token not in product for token in required_product):
+        errors.append("product firmware workflow is missing the two-profile artifact contract")
+    if product.count(f"ref: {exact_head}") < 2 or product.count(exact_head) < 5 or "--git-sha" not in product:
+        errors.append("product firmware workflow must check out and package the exact final head SHA")
+    if "check_repository_policy.py --arduino-only" not in arduino or "compile" in arduino.casefold():
+        errors.append("Arduino policy workflow must verify inventory only, without a compile claim")
+    if f"ref: {exact_head}" not in docs or f"ref: {exact_head}" not in arduino or repository_policy.count(f"ref: {exact_head}") < 2:
+        errors.append("final-SHA validation workflows must explicitly check out the exact head")
+    return errors
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--arduino-only", action="store_true")
+    args = parser.parse_args()
+    policy = load_policy()
+    errors = check_arduino(policy)
+    if not args.arduino_only:
+        errors.extend(check_profiles(policy))
+        errors.extend(check_bsp(policy))
+        errors.extend(check_workflows())
+    for error in errors:
+        print(f"policy: {error}", file=sys.stderr)
+    if errors:
+        return 1
+    print("repository policy OK")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

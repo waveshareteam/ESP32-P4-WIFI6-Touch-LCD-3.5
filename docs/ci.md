@@ -12,8 +12,16 @@ firmware compilation so every required check has a stable meaning.
 - [`esp-idf.yml`](../.github/workflows/esp-idf.yml) classifies the complete Git
   change set, selects affected first-party projects, builds the selected matrix,
   packages flashable artifacts, and reports one aggregate result.
+- [`product-firmware.yml`](../.github/workflows/product-firmware.yml) builds the
+  maintained product source once for each revision profile when conservative
+  routing says that product firmware is affected.
+- [`arduino-policy.yml`](../.github/workflows/arduino-policy.yml) enforces the
+  current zero-sketch inventory and future `ChipVariant=prev3` default without
+  claiming an Arduino compile.
+- [`repository-policy.yml`](../.github/workflows/repository-policy.yml) runs the
+  deterministic profile, packaging, routing, and Windows flasher contracts.
 
-Both workflows run on every pull request and on pushes to `main`. Path filtering
+These workflows run on every pull request and on pushes to `main`. Path filtering
 is performed inside the repository by a versioned classifier, rather than only
 by GitHub's workflow trigger filters, so a required check is still reported for
 documentation-only changes.
@@ -49,7 +57,7 @@ manual-selector cases. Those tests run before the build matrix is created.
 
 Only direct child directories of `examples/esp-idf/` that contain a root
 `CMakeLists.txt` are first-party projects. Nested component examples are not
-matrix entries. Discovery currently yields 12 projects.
+matrix entries. Discovery currently yields 12 projects for this single product.
 
 Every selected project targets `esp32p4` and is compiled against these exact
 stable ESP-IDF tags:
@@ -57,9 +65,34 @@ stable ESP-IDF tags:
 - `v5.5.5`
 - `v6.0.2`
 
+The standard example matrix is 12 projects × 2 ESP-IDF versions = 24 builds;
+all of those builds use the `rev1_3` profile. It is not doubled for every
+silicon-revision profile. The current Arduino inventory is zero, so the
+repository does not claim or run an Arduino build. Its default Arduino policy,
+if an Arduino surface is added later, is `ChipVariant=prev3`.
+
 The matrix uses `fail-fast: false` and a bounded parallelism of six. Component
 Manager downloads and ccache data are isolated by runner OS, ESP-IDF version,
 target, project, and dependency-manifest hash.
+
+## ESP32-P4 revision profiles
+
+The default ESP-IDF profile is `rev1_3` (pre-v3 silicon):
+
+- `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y`
+- `CONFIG_ESP32P4_REV_MIN_100=y`
+
+The `rev3_x` profile is for v3-or-later silicon:
+
+- `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=n`
+- `CONFIG_ESP32P4_REV_MIN_300=y`
+
+Profiles have independent SDK configuration files and build directories. Their
+binaries are incompatible and must not be substituted for one another. The
+maintained product source is
+[`12_esp32-p4-eye`](../examples/esp-idf/12_esp32-p4-eye/): on ESP-IDF v6.0.2 it
+produces separate `rev1_3` and `rev3_x` product jobs and artifacts. This is a
+product-specific compatibility surface, not a second matrix for every example.
 
 Update a framework tag only after checking the official ESP-IDF release and all
 migration guides between the old and new versions. For the current matrix, the
@@ -80,8 +113,18 @@ change as projects and framework versions change.
 
 ## Build artifacts
 
-Every successful matrix entry packages only files referenced by that project's
-`build/flasher_args.json`. Each artifact contains:
+Every successful matrix entry packages only files referenced by that profile's
+`flasher_args.json`; checkout, artifact names, and manifests are bound to the PR
+branch's final HEAD rather than GitHub's temporary merge commit. The product
+artifacts target the ESP32-P4 host only: they do not package ESP32-C6 firmware,
+forbid explicit full-chip or region erase operations, and reject any flash range
+that crosses the 32 MiB artifact-policy ceiling. This safety ceiling does not
+redefine the product table's 16 MB external NOR capacity. Normal `write_flash`
+operation may erase only the sectors it writes. The
+packager and flasher independently validate every ESP image header as ESP32-P4
+chip ID 18, while still allowing raw partition, NVS, and data entries. Each
+package is also checked for expected offsets, SHA-256 hashes, and file sizes.
+Each artifact contains:
 
 - `manifest.json` with project, target, ESP-IDF version, commit, offsets, sizes,
   and SHA-256 hashes;
@@ -91,7 +134,41 @@ Every successful matrix entry packages only files referenced by that project's
 - `flash.sh` and `flash.bat` helpers.
 
 Artifacts are retained for 14 days. Paths are validated to remain inside the
-selected project's build directory before packaging.
+selected profile's build directory before packaging.
+
+The generated flasher probes, then re-probes, the ESP32-P4 silicon revision
+before flashing: silicon revision below 3 accepts only `rev1_3`, while revision
+3 or later accepts only `rev3_x`. Silicon revision identifies neither the PCB
+revision nor the board's electrical revision.
+
+## Windows CI firmware test flow
+
+From a clean checkout of the exact, non-Draft pull-request head, use the root
+CMD entry point:
+
+```text
+Flash-CI-Firmware.cmd -SelfTest
+Flash-CI-Firmware.cmd -ListOnly
+Flash-CI-Firmware.cmd -Port COMx
+```
+
+The interactive command requires Git, an authenticated GitHub CLI, and a Python
+environment containing `esptool`. It accepts only successful Actions runs and
+profile-qualified artifacts whose SHA exactly matches the local branch and the
+open Ready-for-review pull request. `-ListOnly` reports the complete 26-item
+contract: 24 default-profile example artifacts plus the two maintained-product
+profiles. At runtime, pre-v3 silicon selects the 24 examples and the `rev1_3`
+product artifact (25 items); v3-or-later silicon selects only the `rev3_x`
+product artifact.
+
+The tool downloads and validates one artifact, re-probes the chip, writes only
+the manifest flash plan, and then stops. It never advances automatically: test
+the board and click **Mark PASS and flash next** only after the current firmware
+has passed the required hardware checks. Progress is bound to the final SHA,
+artifact build SHA, profile, and normalized COM port; changing ports resets the
+saved confirmations. Attempts, PASS results, downloaded packages, and log paths
+are retained under the user's local application-data directory. These records
+document the manual sequence but do not by themselves constitute HIL evidence.
 
 ## Immutable firmware boundary
 
@@ -105,9 +182,9 @@ maintainer.
 ## Validation boundary
 
 A successful Actions run proves only that the selected source projects compile
-and package with the recorded framework versions. It does not prove runtime
-compatibility of the ESP32-C6 coprocessor firmware, nor validate display, touch,
-camera, audio, storage, USB, power, or radio behavior. Those remain board-level
-acceptance tests. This repository intentionally uses post-commit Actions as its
-compile evidence; the maintenance workflow does not perform a local ESP-IDF
-build.
+and package with the recorded framework versions. It is not hardware-in-the-loop
+(HIL) evidence and does not prove runtime compatibility of the ESP32-C6
+coprocessor firmware, or validate display, touch, camera, audio, storage, USB,
+power, or radio behavior. Those remain board-level acceptance tests. This
+repository intentionally uses post-commit Actions as its compile evidence; the
+maintenance workflow does not perform a local ESP-IDF build.

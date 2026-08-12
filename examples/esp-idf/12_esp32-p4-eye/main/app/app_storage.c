@@ -10,6 +10,7 @@
 #include "driver/gpio.h"
 #include "driver/jpeg_decode.h"
 #include "bsp/esp-bsp.h"
+#include "bsp_board_extra.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "tinyusb.h"
@@ -663,7 +664,7 @@ esp_err_t app_storage_save_picture(const uint8_t *data, size_t len)
 
 static void app_storage_check_sd_card_task(void *pvParameters)
 {
-    bsp_sdcard_detect_init();
+    bsp_extra_sdcard_detect_init();
     bool is_sd_card_present = false;
     bool is_sd_card_mounted = false;
     bool usb_msc_initialized = false;
@@ -671,7 +672,7 @@ static void app_storage_check_sd_card_task(void *pvParameters)
     bool directory_checked = false;
 
     while(1) {
-        bool current_is_sd_card_present = bsp_sdcard_is_present();
+        bool current_is_sd_card_present = bsp_extra_sdcard_is_present();
         if (current_is_sd_card_present != is_sd_card_present) {
             is_sd_card_present = current_is_sd_card_present;
             if (is_sd_card_present) {

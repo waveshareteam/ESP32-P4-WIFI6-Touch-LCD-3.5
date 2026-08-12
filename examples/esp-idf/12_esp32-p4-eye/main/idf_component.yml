@@ -1,4 +1,8 @@
 dependencies:
+  waveshare/esp32_p4_wifi6_touch_lcd_3_5:
+    version: "==2.0.0"
+    public: true
+
   espressif/button:
     # v4.2.0 retains the event, GPIO-device, and multiple-click APIs used here.
     version: "==4.2.0"

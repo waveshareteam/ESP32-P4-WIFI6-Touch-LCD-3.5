@@ -35,6 +35,7 @@ class ClassifyChangesTests(unittest.TestCase):
         )
         self.assertEqual(report["esp_idf"]["mode"], "none")
         self.assertTrue(report["scope"]["docs_only"])
+        self.assertFalse(report["scope"]["product_firmware_required"])
 
         pull_request_template = self.report(
             "M\t.github/pull_request_template.md"
@@ -50,6 +51,7 @@ class ClassifyChangesTests(unittest.TestCase):
         for changed_path in (
             "config/markdown-audit.json",
             "config/ci-routing.json",
+            "scripts/check_readme.py",
         ):
             with self.subTest(changed_path=changed_path):
                 report = self.report(f"M\t{changed_path}")
@@ -63,6 +65,17 @@ class ClassifyChangesTests(unittest.TestCase):
         )
         self.assertEqual(report["esp_idf"]["mode"], "selected")
         self.assertEqual(self.selected_names(report), ["09_video_lcd_display"])
+        self.assertFalse(report["scope"]["product_firmware_required"])
+
+    def test_product_firmware_routing_is_conservative(self) -> None:
+        product = self.report(
+            "M\texamples/esp-idf/12_esp32-p4-eye/main/main.c"
+        )
+        self.assertTrue(product["scope"]["product_firmware_required"])
+        profile = self.report("M\tconfig/revision-profiles.json")
+        self.assertTrue(profile["scope"]["product_firmware_required"])
+        unknown = self.report("A\ttools/new_generator.py")
+        self.assertTrue(unknown["scope"]["product_firmware_required"])
 
     def test_cmake_is_build_input_but_readme_txt_is_documentation(self) -> None:
         cmake = self.report(
@@ -87,6 +100,7 @@ class ClassifyChangesTests(unittest.TestCase):
                 report = self.report(f"M\t{changed_path}")
                 self.assertEqual(report["esp_idf"]["mode"], "all")
                 self.assertEqual(len(self.selected_names(report)), 12)
+                self.assertTrue(report["scope"]["product_firmware_required"])
 
     def test_firmware_files_never_enter_example_matrix(self) -> None:
         markdown = self.report("M\tfirmware/README.md")
@@ -134,6 +148,8 @@ class ClassifyChangesTests(unittest.TestCase):
         )
         self.assertEqual(self.selected_names(by_name), ["09_video_lcd_display"])
         self.assertEqual(self.selected_names(by_path), ["09_video_lcd_display"])
+        product = classify.classify_selector("12_esp32-p4-eye")
+        self.assertTrue(product["scope"]["product_firmware_required"])
 
     def test_exact_workflow_cli_writes_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -166,6 +182,7 @@ class ClassifyChangesTests(unittest.TestCase):
             )
             self.assertEqual(outputs["mode"], "selected")
             self.assertEqual(outputs["count"], "1")
+            self.assertEqual(outputs["product_firmware_required"], "false")
             self.assertEqual(
                 json.loads(outputs["examples"])[0]["name"],
                 "09_video_lcd_display",

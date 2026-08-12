@@ -24,3 +24,11 @@ time; do not treat this directory itself as an ESP-IDF application.
 The repository classifier selects only affected projects for local source
 changes and all projects for shared or CI changes. See the
 [CI policy](../../docs/ci.md) and [component policy](../../docs/components.md).
+
+The standard CI matrix is 12 projects × ESP-IDF v5.5.5/v6.0.2 = 24 builds,
+all using the `rev1_3` (pre-v3) profile; it is not a doubled per-revision
+matrix. The maintained product source `12_esp32-p4-eye` has separate
+`rev1_3` and `rev3_x` product jobs/artifacts on IDF v6.0.2. Profiles have
+independent sdkconfigs/build directories and incompatible binaries. There are
+no Arduino examples or Arduino CI builds; the default future Arduino policy is
+`ChipVariant=prev3`. Compile success is not HIL or peripheral validation.

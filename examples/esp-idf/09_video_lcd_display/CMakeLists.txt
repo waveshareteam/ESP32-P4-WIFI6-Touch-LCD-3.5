@@ -3,5 +3,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 add_compile_options(-Wno-maybe-uninitialized)
+include("${CMAKE_CURRENT_LIST_DIR}/../../../config/revision_profiles.cmake")
+waveshare_configure_revision_profile("${CMAKE_CURRENT_LIST_DIR}")
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(video_lcd_display)

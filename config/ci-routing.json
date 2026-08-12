@@ -2,14 +2,19 @@
   "build_override_patterns": [],
   "documentation_patterns": [
     "config/markdown-audit.json",
-    "config/ci-routing.json"
+    "config/ci-routing.json",
+    "scripts/check_readme.py"
   ],
   "documentation_asset_patterns": [],
-  "ignore_build_patterns": [],
+  "ignore_build_patterns": [
+    ".gitignore"
+  ],
   "firmware_patterns": [],
   "esp_idf_shared_patterns": [],
   "arduino_shared_patterns": [],
-  "esp_idf_global_patterns": [],
+  "esp_idf_global_patterns": [
+    "config/revision-profiles.json"
+  ],
   "arduino_global_patterns": [],
   "global_build_patterns": [
     "Flash-CI-Firmware.cmd",

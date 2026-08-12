@@ -221,15 +221,6 @@ def main() -> int:
         counterparts[english] = "README_ZH.md"
         counterparts[chinese] = "README.md"
 
-        bsp_readme = (
-            example_root
-            / "components"
-            / "esp32_p4_wifi6_touch_lcd_35"
-            / "README.md"
-        )
-        if bsp_readme.is_file():
-            supporting_docs.append(bsp_readme)
-
     for document in supporting_docs:
         check_supporting_document(document, counterparts.get(document), errors)
     check_product_image(errors)

@@ -1,12 +1,6 @@
 {
   "classification_rules": [
     {
-      "category": "first_party_wrapper",
-      "patterns": [
-        "examples/esp-idf/*/components/esp32_p4_wifi6_touch_lcd_35/**"
-      ]
-    },
-    {
       "category": "embedded_upstream",
       "patterns": [
         "examples/esp-idf/*/components/esp_extractor/**"
@@ -15,12 +9,10 @@
   ],
   "exclude_patterns": [],
   "pair_exempt_patterns": [
-    ".github/pull_request_template.md",
-    "examples/esp-idf/*/components/esp32_p4_wifi6_touch_lcd_35/README.md"
+    ".github/pull_request_template.md"
   ],
   "language_link_exempt_patterns": [
-    ".github/pull_request_template.md",
-    "examples/esp-idf/*/components/esp32_p4_wifi6_touch_lcd_35/README.md"
+    ".github/pull_request_template.md"
   ],
   "relative_link_ignore_patterns": [],
   "docs_only_allowed_patterns": [],

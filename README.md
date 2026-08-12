@@ -83,7 +83,9 @@ components and coprocessor firmware compatible when changing its dependencies.
 | [11_esp_brookesia_phone](examples/esp-idf/11_esp_brookesia_phone/) | ESP-Brookesia phone-style UI |
 | [12_esp32-p4-eye](examples/esp-idf/12_esp32-p4-eye/) | Camera, album, and on-device vision demo |
 
-Arduino sketches are not currently included in this repository.
+Arduino sketches are not currently included in this repository. The Arduino
+inventory is zero; no Arduino build is represented as passing. If that surface
+is introduced, its default policy is `ChipVariant=prev3`.
 
 ## ✅ Continuous Integration
 
@@ -92,7 +94,13 @@ discovers every direct project under `examples/esp-idf/` and classifies the
 complete Git diff. Project-local source changes build only the affected project;
 shared, workflow, or unknown build inputs select all projects. Documentation and
 governance changes still report the stable CI gate but skip the firmware matrix.
-Every selected project is compiled for `esp32p4` with ESP-IDF v5.5.5 and v6.0.2.
+The standard matrix remains 12 projects × ESP-IDF v5.5.5/v6.0.2 = 24 builds,
+all using the pre-v3 `rev1_3` profile; it is not doubled for every silicon
+revision. The maintained product source, `12_esp32-p4-eye`, additionally has
+profile-qualified `rev1_3` and `rev3_x` product jobs/artifacts on IDF v6.0.2.
+Those profiles use incompatible binaries and separate sdkconfigs/build
+directories. See the [CI guide](docs/ci.md) for exact profile settings and
+flashing safeguards.
 
 Every successful matrix entry uploads a flashable artifact derived from that
 project's `flasher_args.json`. The checked-in prebuilt image under `firmware/`
@@ -122,7 +130,7 @@ hardware-validation evidence.
 | [`assets/`](assets/) | Product images used by the documentation |
 | [`example/`](example/) | Compatibility notice for the former example path |
 | [`docs/`](docs/) | CI, component, and maintenance policy |
-| [`.github/workflows/`](.github/workflows/) | ESP-IDF builds and documentation validation |
+| [`.github/workflows/`](.github/workflows/) | Example, product-firmware, repository-policy, and documentation CI |
 | [`scripts/`](scripts/) | CI discovery, artifact packaging, and documentation validation helpers |
 
 ## 📚 Documentation and Support
@@ -143,7 +151,8 @@ Waveshare.
 
 A green Actions run is compile-and-package evidence, not board-level proof.
 Display, touch, camera, audio, storage, USB, power, and ESP32-C6 hosted-wireless
-behavior must still be validated on the target hardware.
+behavior must still be validated on the target hardware; this repository makes
+no hardware-validation claim.
 
 ## 📄 License
 

@@ -28,6 +28,7 @@ CANONICAL_EXAMPLE_ROOT = PurePosixPath("examples/esp-idf")
 LEGACY_EXAMPLE_ROOT = PurePosixPath("example/ESP-IDF")
 FIRMWARE_ROOT = PurePosixPath("firmware")
 RELEASE_ROOT = PurePosixPath("releases")
+PRODUCT_FIRMWARE_PROJECT = "12_esp32-p4-eye"
 
 DOCUMENT_EXTENSIONS = {".md", ".mdx", ".rst", ".adoc"}
 DOCUMENT_ASSET_EXTENSIONS = {
@@ -389,6 +390,22 @@ def classify_changes(changes: list[Change]) -> dict[str, object]:
         for route in routes
         if PurePosixPath(route.path).suffix.casefold() in DELIVERY_EXTENSIONS
     )
+    product_firmware_required = any(
+        route.kind
+        in {
+            "global_build_input",
+            "shared_example_root",
+            "shared_example_source",
+            "unknown",
+            "unknown_example_path",
+        }
+        or (
+            route.kind == "project_source"
+            and PurePosixPath(route.path).parts[:3]
+            == (*CANONICAL_EXAMPLE_ROOT.parts, PRODUCT_FIRMWARE_PROJECT)
+        )
+        for route in routes
+    )
     return {
         "schema_version": 1,
         "scope": {
@@ -396,6 +413,7 @@ def classify_changes(changes: list[Change]) -> dict[str, object]:
             "impact_paths": changed_paths,
             "docs_only": all(route.docs_only for route in routes),
             "example_build_required": bool(selected),
+            "product_firmware_required": product_firmware_required,
             "firmware_touched": any(is_under(PurePosixPath(path), FIRMWARE_ROOT) for path in changed_paths),
             "release_review_required": bool(delivery_paths),
             "delivery_paths": delivery_paths,
@@ -421,6 +439,9 @@ def classify_selector(selector: str) -> dict[str, object]:
             "impact_paths": [],
             "docs_only": False,
             "example_build_required": True,
+            "product_firmware_required": any(
+                project.name == PRODUCT_FIRMWARE_PROJECT for project in selected
+            ),
             "firmware_touched": False,
             "release_review_required": False,
             "delivery_paths": [],
@@ -444,6 +465,10 @@ def append_github_outputs(path: Path, report: dict[str, object]) -> None:
         output.write(f"examples={json.dumps(selected, separators=(',', ':'))}\n")
         output.write(f"count={len(selected)}\n")
         output.write(f"docs_only={str(scope['docs_only']).lower()}\n")
+        output.write(
+            "product_firmware_required="
+            f"{str(scope['product_firmware_required']).lower()}\n"
+        )
         output.write(f"firmware_touched={str(scope['firmware_touched']).lower()}\n")
         output.write(
             "release_review_required="

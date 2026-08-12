@@ -1,5 +1,8 @@
 ## IDF Component Manager Manifest File
 dependencies:
+  waveshare/esp32_p4_wifi6_touch_lcd_3_5:
+    version: "==2.0.0"
+    public: true
   lvgl/lvgl:
     version: "9.4.*"
     public: true

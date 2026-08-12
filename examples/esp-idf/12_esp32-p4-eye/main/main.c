@@ -4,6 +4,7 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "bsp/esp-bsp.h"
+#include "bsp_board_extra.h"
 #include "ui_extra.h"
 #include "app_control.h"
 #include "app_video_stream.h"
@@ -25,13 +26,13 @@ void app_main(void)
 
     // Initialize the flashlight
     ESP_LOGI(TAG, "Initialize the flashlight");
-    ESP_ERROR_CHECK(bsp_flashlight_init());
+    ESP_ERROR_CHECK(bsp_extra_flashlight_init());
 
     // Initialize the I2C first
     ESP_LOGI(TAG, "Initialize the I2C");
-    i2c_master_bus_handle_t i2c_handle;
     ESP_ERROR_CHECK(bsp_i2c_init());
-    bsp_get_i2c_bus_handle(&i2c_handle);
+    i2c_master_bus_handle_t i2c_handle = bsp_i2c_get_handle();
+    ESP_ERROR_CHECK(i2c_handle ? ESP_OK : ESP_ERR_INVALID_STATE);
 
     // Initialize the AI detect
     ESP_LOGI(TAG, "Initialize the AI detect");

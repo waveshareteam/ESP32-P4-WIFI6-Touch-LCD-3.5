@@ -11,6 +11,7 @@
 #include "driver/ppa.h"
 #include "driver/jpeg_encode.h"
 #include "bsp/esp-bsp.h"
+#include "bsp_board_extra.h"
 #include "ui_extra.h"
 #include "app_video.h"
 #include "app_storage.h"
@@ -156,7 +157,7 @@ esp_err_t take_and_save_photo(uint8_t *camera_buf, uint32_t width, uint32_t heig
     esp_err_t ret = ESP_OK;
     uint8_t *pic_buf = NULL;
 
-    bsp_flashlight_set(app_video_stream_get_flash_light_state());
+    bsp_extra_flashlight_set(app_video_stream_get_flash_light_state());
 
     uint32_t photo_width = photo_resolution_width[current_resolution];
     uint32_t photo_height = photo_resolution_height[current_resolution];
@@ -266,7 +267,7 @@ esp_err_t take_and_save_photo(uint8_t *camera_buf, uint32_t width, uint32_t heig
 cleanup:
     // Note: photo_buf is pre-allocated and managed by init/deinit functions, don't free it here
 
-    bsp_flashlight_set(false);
+    bsp_extra_flashlight_set(false);
 
     // Handle interval photo
     if (app_video_stream_get_interval_photo_state() && ret == ESP_OK) {
@@ -314,7 +315,7 @@ static void enter_deep_sleep(uint16_t sleep_minutes)
     esp_sleep_enable_timer_wakeup(sleep_time_us);
     
     // Initialize sleep IO
-    bsp_enter_sleep_init();
+    bsp_extra_enter_sleep_init();
 
     // Enter deep sleep
     esp_deep_sleep_start();
@@ -338,18 +339,10 @@ static void interval_sleep_task(void *pvParameters)
 
     vTaskDelay(pdMS_TO_TICKS(100));
 
-#if (BSP_CONFIG_NO_GRAPHIC_LIB == 0)
-    esp_err_t lv_ret = lvgl_port_stop();
-    if (lv_ret != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to stop LVGL port before deinit: %s", esp_err_to_name(lv_ret));
+    esp_err_t display_ret = bsp_display_backlight_off();
+    if (display_ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to disable display backlight before sleep: %s", esp_err_to_name(display_ret));
     }
-
-    lv_ret = lvgl_port_deinit();
-    if (lv_ret != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to deinit LVGL port: %s", esp_err_to_name(lv_ret));
-    }
-#endif
-    bsp_display_del();
     
     // Enter deep sleep
     enter_deep_sleep(sleep_minutes);
