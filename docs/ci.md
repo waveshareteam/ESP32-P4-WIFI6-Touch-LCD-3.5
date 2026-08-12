@@ -117,9 +117,13 @@ Every successful matrix entry packages only files referenced by that profile's
 `flasher_args.json`; checkout, artifact names, and manifests are bound to the PR
 branch's final HEAD rather than GitHub's temporary merge commit. The product
 artifacts target the ESP32-P4 host only: they do not package ESP32-C6 firmware,
-forbid explicit full-chip or region erase operations, and reject any flash range
-that crosses the 32 MiB artifact-policy ceiling. This safety ceiling does not
-redefine the product table's 16 MB external NOR capacity. Normal `write_flash`
+forbid explicit full-chip or region erase operations, and keep three independent
+capacity contracts: a 32 MiB artifact-policy ceiling, the product's 16 MiB
+physical external NOR capacity, and (when `flasher_args.json` declares
+`--flash-size` or `--flash_size`) the supported 2/4/8/16 MB esptool declaration.
+The effective flash-plan limit is the lowest applicable value; absent declarations
+still use the 16 MiB physical cap. The schema-2 manifest records all three values
+so the Windows flasher independently enforces the same limit. Normal `write_flash`
 operation may erase only the sectors it writes. The
 packager and flasher independently validate every ESP image header as ESP32-P4
 chip ID 18, while still allowing raw partition, NVS, and data entries. Each
@@ -127,7 +131,7 @@ package is also checked for expected offsets, SHA-256 hashes, and file sizes.
 Each artifact contains:
 
 - `manifest.json` with project, target, ESP-IDF version, commit, offsets, sizes,
-  and SHA-256 hashes;
+  SHA-256 hashes, policy/device capacities, and the nullable declared flash size;
 - portable `flasher_args.json` and `flash_args` metadata;
 - the exact bootloader, partition table, application, and other referenced
   binaries;

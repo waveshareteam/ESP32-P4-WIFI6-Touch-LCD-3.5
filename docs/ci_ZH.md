@@ -97,12 +97,16 @@ v6.0.2 上产生独立的 `rev1_3` 与 `rev3_x` 产品任务和制品。这是�
 每个成功矩阵任务只打包该配置的 `flasher_args.json` 引用的文件；检出内容、制品名称和
 manifest 都绑定 PR 分支的最终 HEAD，而不是 GitHub 的临时合并提交，并且都带有配置标识。
 产品制品仅面向 ESP32-P4 主机：不包含 ESP32-C6 固件，禁止显式整片或区域擦除操作，并
-拒绝越过 32 MiB 制品策略上限的烧录范围；这个安全上限不会改变产品参数表记录的 16 MB
-外置 NOR Flash 容量。正常 `write_flash` 仍可能擦除它实际写入的扇区。打包器和烧录器
+维持三项独立容量契约：32 MiB 制品策略上限、产品 16 MiB 物理外置 NOR Flash 容量，以及
+（当 `flasher_args.json` 声明 `--flash-size` 或 `--flash_size` 时）受支持的 2/4/8/16 MB
+esptool 声明。实际烧录计划取所有适用上限中的最小值；未声明时仍使用 16 MiB 物理上限。
+schema-2 manifest 会记录这三项值，Windows 烧录器也会独立执行相同上限。正常 `write_flash`
+仍可能擦除它实际写入的扇区。打包器和烧录器
 会分别校验每个 ESP 镜像头都是 ESP32-P4 芯片 ID 18，同时允许原始分区表、NVS 和数据项。
 打包还会检查预期偏移、SHA-256 哈希和文件大小。制品包含：
 
-- `manifest.json`：工程、目标、ESP-IDF 版本、提交、偏移、大小和 SHA-256；
+- `manifest.json`：工程、目标、ESP-IDF 版本、提交、偏移、大小、SHA-256、策略/设备容量
+  以及可为空的声明 Flash 大小；
 - 可移植的 `flasher_args.json` 与 `flash_args`；
 - 元数据实际引用的 bootloader、分区表、应用程序和其他二进制；
 - `flash.sh` 与 `flash.bat` 辅助脚本。

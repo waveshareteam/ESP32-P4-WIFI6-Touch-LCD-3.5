@@ -19,7 +19,15 @@ from typing import Any
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BAUD = 460800
-FLASH_CAPACITY = 32 * 1024 * 1024
+ARTIFACT_POLICY_CAPACITY = 32 * 1024 * 1024
+DEVICE_FLASH_CAPACITY = 16 * 1024 * 1024
+DECLARED_FLASH_SIZES = {
+    "2mb": 2 * 1024 * 1024,
+    "4mb": 4 * 1024 * 1024,
+    "8mb": 8 * 1024 * 1024,
+    "16mb": 16 * 1024 * 1024,
+}
+FLASH_SIZE_OPTION_RE = re.compile(r"^--flash(?:-|_)size(?:=(?P<value>.*))?$")
 ESP_IMAGE_MAGIC = 0xE9
 ESP_IMAGE_HEADER_SIZE = 24
 ESP_IMAGE_MAX_SEGMENTS = 16
@@ -135,6 +143,42 @@ def load_flasher_args(build_dir: Path) -> dict[str, Any]:
     return data
 
 
+def declared_flash_size_bytes(flasher_args: dict[str, Any]) -> int | None:
+    """Read one explicit esptool flash-size declaration, when the build supplies it."""
+    write_flash_args = flasher_args.get("write_flash_args", [])
+    if not isinstance(write_flash_args, list):
+        raise ValueError("write_flash_args must be a list")
+    declarations: list[int] = []
+    for index, argument in enumerate(write_flash_args):
+        match = FLASH_SIZE_OPTION_RE.fullmatch(str(argument))
+        if match is None:
+            continue
+        inline_value = match.group("value")
+        if inline_value is not None:
+            if not inline_value:
+                raise ValueError(f"{argument} is missing its flash-size value")
+            value = inline_value
+        elif index + 1 >= len(write_flash_args) or str(write_flash_args[index + 1]).startswith("--"):
+            raise ValueError(f"{argument} is missing its flash-size value")
+        else:
+            value = str(write_flash_args[index + 1])
+        size = DECLARED_FLASH_SIZES.get(value.casefold())
+        if size is None:
+            raise ValueError(f"unsupported declared esptool flash size: {value}")
+        declarations.append(size)
+    if len(declarations) > 1:
+        raise ValueError("duplicate or conflicting esptool flash-size declarations")
+    return declarations[0] if declarations else None
+
+
+def effective_flash_capacity(declared_size: int | None) -> int:
+    return min(
+        ARTIFACT_POLICY_CAPACITY,
+        DEVICE_FLASH_CAPACITY,
+        declared_size if declared_size is not None else DEVICE_FLASH_CAPACITY,
+    )
+
+
 def parse_sdkconfig(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
     try:
@@ -218,7 +262,7 @@ def canonical_relative_build_file(raw_file: str) -> PurePosixPath:
 
 
 def normalize_flash_files(
-    build_dir: Path, flash_files: dict[str, Any]
+    build_dir: Path, flash_files: dict[str, Any], capacity: int
 ) -> list[tuple[int, str, Path, PurePosixPath]]:
     normalized: list[tuple[int, str, Path, PurePosixPath]] = []
     seen_offsets: set[int] = set()
@@ -249,8 +293,10 @@ def normalize_flash_files(
         if size <= 0:
             raise ValueError(f"flash file at {offset_text} has zero size")
         end = offset + size
-        if end > FLASH_CAPACITY:
-            raise ValueError(f"flash range at {offset_text} exceeds the 32 MiB device limit")
+        if end > capacity:
+            raise ValueError(
+                f"flash range at {offset_text} exceeds the effective {capacity // (1024 * 1024)} MiB capacity"
+            )
         if any(offset < other_end and other_offset < end for other_offset, other_end in ranges):
             raise ValueError(f"flash range at {offset_text} overlaps another flash file")
         ranges.append((offset, end))
@@ -359,7 +405,10 @@ def package(args: argparse.Namespace) -> Path:
     reject_c6_content(flasher_args)
     reject_erase_content(flasher_args)
     normalized_git_sha = git_sha(args.git_sha)
-    flash_files = normalize_flash_files(build_dir, flasher_args["flash_files"])
+    declared_size = declared_flash_size_bytes(flasher_args)
+    flash_files = normalize_flash_files(
+        build_dir, flasher_args["flash_files"], effective_flash_capacity(declared_size)
+    )
     # Validate source image headers before creating an artifact directory, so a
     # rejected C6/malformed image cannot leave a partial package behind.
     source_image_ids = {source: image_chip_id(source) for _, _, source, _ in flash_files}
@@ -406,6 +455,9 @@ def package(args: argparse.Namespace) -> Path:
         "git_sha": normalized_git_sha,
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "baud": args.baud,
+        "artifact_policy_capacity_bytes": ARTIFACT_POLICY_CAPACITY,
+        "device_flash_capacity_bytes": DEVICE_FLASH_CAPACITY,
+        "declared_flash_size_bytes": declared_size,
         "files": manifest_files,
         "flash_command": shlex.join(command),
     }

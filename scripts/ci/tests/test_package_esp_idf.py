@@ -54,6 +54,9 @@ class PackageEspIdfTests(unittest.TestCase):
                 self.assertEqual(manifest["git_sha"], args.git_sha.lower())
                 self.assertEqual(manifest["files"][1]["image_chip_id"], package.ESP32P4_IMAGE_CHIP_ID)
                 self.assertNotIn("erase", manifest["flash_command"])
+                self.assertEqual(manifest["artifact_policy_capacity_bytes"], 32 * 1024 * 1024)
+                self.assertEqual(manifest["device_flash_capacity_bytes"], 16 * 1024 * 1024)
+                self.assertIsNone(manifest["declared_flash_size_bytes"])
             finally:
                 package.REPOSITORY_ROOT = original
 
@@ -109,7 +112,7 @@ class PackageEspIdfTests(unittest.TestCase):
             try:
                 args = self.make_project(root)
                 build = root / "example" / "build-rev1_3"
-                for flash_files, expected in (({"0x1000": "boot.bin", "0x1002": "app.bin"}, "overlaps"), ({hex(package.FLASH_CAPACITY): "app.bin"}, "32 MiB")):
+                for flash_files, expected in (({"0x1000": "boot.bin", "0x1002": "app.bin"}, "overlaps"), ({hex(package.DEVICE_FLASH_CAPACITY): "app.bin"}, "16 MiB")):
                     (build / "flasher_args.json").write_text(json.dumps({"flash_files": flash_files}), encoding="utf-8")
                     with self.assertRaisesRegex(ValueError, expected):
                         package.package(args)
@@ -139,6 +142,105 @@ class PackageEspIdfTests(unittest.TestCase):
                 args.target = "esp32p4"
                 (build / "flasher_args.json").write_text(json.dumps({"flash_files": {"0x1000": "c6.bin"}}), encoding="utf-8")
                 with self.assertRaisesRegex(ValueError, "C6"):
+                    package.package(args)
+            finally:
+                package.REPOSITORY_ROOT = original
+
+    def test_declared_flash_size_contract(self) -> None:
+        self.assertEqual(
+            package.declared_flash_size_bytes({"write_flash_args": ["--flash-size", "2MB"]}),
+            2 * 1024 * 1024,
+        )
+        self.assertEqual(
+            package.declared_flash_size_bytes({"write_flash_args": ["--flash_size", "16mb"]}),
+            16 * 1024 * 1024,
+        )
+        self.assertEqual(
+            package.declared_flash_size_bytes({"write_flash_args": ["--flash-size=4MB"]}),
+            4 * 1024 * 1024,
+        )
+        self.assertEqual(
+            package.declared_flash_size_bytes({"write_flash_args": ["--flash_size=8mb"]}),
+            8 * 1024 * 1024,
+        )
+        self.assertIsNone(
+            package.declared_flash_size_bytes(
+                {"write_flash_args": ["--flash-size-extra", "32MB"]}
+            )
+        )
+        for arguments, expected in (
+            (["--flash-size"], "missing"),
+            (["--flash-size="], "missing"),
+            (["--flash_size="], "missing"),
+            (["--flash-size", "1MB"], "unsupported"),
+            (["--flash-size", "32MB"], "unsupported"),
+            (["--flash-size=32MB"], "unsupported"),
+            (["--flash-size", "2MB", "--flash_size", "2MB"], "duplicate"),
+            (["--flash-size", "2MB", "--flash_size", "4MB"], "duplicate"),
+            (["--flash-size=2MB", "--flash_size", "2MB"], "duplicate"),
+            (["--flash-size=2MB", "--flash_size=4MB"], "duplicate"),
+        ):
+            with self.subTest(arguments=arguments), self.assertRaisesRegex(ValueError, expected):
+                package.declared_flash_size_bytes({"write_flash_args": arguments})
+
+    def test_declared_capacity_bounds(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = package.REPOSITORY_ROOT
+            package.REPOSITORY_ROOT = root
+            try:
+                args = self.make_project(root)
+                build = root / "example" / "build-rev1_3"
+                (build / "flasher_args.json").write_text(
+                    json.dumps(
+                        {
+                            "flash_files": {"0x1000": "boot.bin", "0x10000": "app.bin"},
+                            "write_flash_args": ["--flash-size", "2MB"],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                artifact = package.package(args)
+                manifest = json.loads((artifact / "manifest.json").read_text(encoding="utf-8"))
+                self.assertEqual(manifest["declared_flash_size_bytes"], 2 * 1024 * 1024)
+
+                args.output_root = "artifacts-over-declared"
+                (build / "flasher_args.json").write_text(
+                    json.dumps(
+                        {
+                            "flash_files": {"0x200000": "app.bin"},
+                            "write_flash_args": ["--flash_size", "2MB"],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                with self.assertRaisesRegex(ValueError, "2 MiB"):
+                    package.package(args)
+
+                args.output_root = "artifacts-16mb-boundary"
+                boundary = package.DEVICE_FLASH_CAPACITY - len(self.p4_image())
+                (build / "flasher_args.json").write_text(
+                    json.dumps(
+                        {
+                            "flash_files": {hex(boundary): "app.bin"},
+                            "write_flash_args": ["--flash-size", "16MB"],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                package.package(args)
+
+                args.output_root = "artifacts-past-16mb"
+                (build / "flasher_args.json").write_text(
+                    json.dumps(
+                        {
+                            "flash_files": {hex(boundary + 1): "app.bin"},
+                            "write_flash_args": ["--flash-size", "16MB"],
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                with self.assertRaisesRegex(ValueError, "16 MiB"):
                     package.package(args)
             finally:
                 package.REPOSITORY_ROOT = original

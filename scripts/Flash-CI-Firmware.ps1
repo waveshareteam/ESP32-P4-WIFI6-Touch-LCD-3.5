@@ -12,7 +12,9 @@ $Repo = 'waveshareteam/ESP32-P4-WIFI6-Touch-LCD-3.5'
 $ExpectedTarget = 'esp32p4'
 $ExpectedFramework = 'ESP-IDF'
 $ExpectedBaud = 460800
-$FlashCapacity = 32MB
+$ArtifactPolicyCapacity = 32MB
+$DeviceFlashCapacity = 16MB
+$SupportedDeclaredFlashCapacities = @(2MB, 4MB, 8MB, 16MB)
 $StateVersion = 2
 $DefaultStartIndex = 1
 $RevisionWarning = 'Silicon revision cannot establish PCB/electrical revision.'
@@ -131,6 +133,26 @@ function Get-EspImageChipId([string]$Path) {
     return [int]$chipId
 }
 
+function Get-EffectiveFlashCapacity($Manifest) {
+    foreach ($property in @('artifact_policy_capacity_bytes', 'device_flash_capacity_bytes', 'declared_flash_size_bytes')) {
+        if (-not $Manifest.PSObject.Properties[$property]) { throw 'Package manifest capacity contract is incomplete.' }
+    }
+    if (($Manifest.artifact_policy_capacity_bytes -isnot [long] -and $Manifest.artifact_policy_capacity_bytes -isnot [int]) -or
+        ($Manifest.device_flash_capacity_bytes -isnot [long] -and $Manifest.device_flash_capacity_bytes -isnot [int]) -or
+        [int64]$Manifest.artifact_policy_capacity_bytes -ne [int64]$ArtifactPolicyCapacity -or
+        [int64]$Manifest.device_flash_capacity_bytes -ne [int64]$DeviceFlashCapacity) {
+        throw 'Package manifest capacity contract is unsafe.'
+    }
+    $declared = $Manifest.declared_flash_size_bytes
+    if ($null -ne $declared) {
+        if ($declared -isnot [long] -and $declared -isnot [int]) { throw 'Package manifest declared flash size is unsafe.' }
+        $declaredBytes = [int64]$declared
+        if ($SupportedDeclaredFlashCapacities -notcontains $declaredBytes) { throw 'Package manifest declared flash size is unsupported.' }
+        return [Math]::Min([Math]::Min([int64]$ArtifactPolicyCapacity, [int64]$DeviceFlashCapacity), $declaredBytes)
+    }
+    return [Math]::Min([int64]$ArtifactPolicyCapacity, [int64]$DeviceFlashCapacity)
+}
+
 function Test-PackageManifest([string]$PackageDir, $Item, [string]$ArtifactSha) {
     $manifestPath = Join-Path $PackageDir 'manifest.json'
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw 'Package manifest.json is missing.' }
@@ -149,6 +171,7 @@ function Test-PackageManifest([string]$PackageDir, $Item, [string]$ArtifactSha) 
         [string]$manifest.flash_command -match '(?i)(?:--?erase[-_]?all|erase[-_]?(?:all|flash|region))') {
         throw 'Package manifest flash metadata is incomplete or unsafe.'
     }
+    $effectiveFlashCapacity = Get-EffectiveFlashCapacity $manifest
     Test-NoC6Content $PackageDir $manifestText
     Test-NoEraseContent $PackageDir $manifestText
     $plan = @(); $offsets = @{}; $p4ImageCount = 0
@@ -167,7 +190,7 @@ function Test-PackageManifest([string]$PackageDir, $Item, [string]$ArtifactSha) 
         elseif ($actualChipId -ne 18 -or [int]$file.image_chip_id -ne $actualChipId) { throw "Manifest image_chip_id does not match the ESP32-P4 header: $relativePath" }
         else { $p4ImageCount++ }
         $offset = [Convert]::ToInt64(([string]$file.offset).Substring(2), 16)
-        if ($offsets.ContainsKey($offset) -or $offset + $actualSize -gt $FlashCapacity) { throw "Manifest flash range is unsafe: $relativePath" }
+        if ($offsets.ContainsKey($offset) -or $offset + $actualSize -gt $effectiveFlashCapacity) { throw "Manifest flash range is unsafe: $relativePath" }
         $offsets[$offset] = $true; $plan += [pscustomobject]@{ Offset = $offset; Size = $actualSize; Path = $fullPath }
     }
     $orderedPlan = @($plan | Sort-Object Offset)
@@ -384,16 +407,26 @@ function Invoke-SelfTest {
         if ([bool]$persisted.Completed -ne $false -or @($persisted.Attempts).Count -ne 1 -or @($persisted.Results).Count -ne 1 -or [string]$persisted.Attempts[0].LogPath -ne 'logs/test.log') { throw 'SelfTest state JSON round-trip failed.' }
         $bin = Join-Path $root 'bin'; New-Item -ItemType Directory -Path $bin | Out-Null
         $one = Join-Path $bin 'one.bin'; $two = Join-Path $bin 'two.bin'; $p4Header = New-Object byte[] 24; $p4Header[0] = 0xE9; $p4Header[1] = 1; $p4Header[12] = 18; [System.IO.File]::WriteAllBytes($one, $p4Header); [System.IO.File]::WriteAllBytes($two, [byte[]](5, 6, 7, 8))
-        $item = $Items[0]; $manifest = [ordered]@{ schema_version = 2; artifact_kind = 'esp-idf-flashable'; profile = $item.Profile; host_only = $true; contains_c6_firmware = $false; name = $item.Name; framework = $item.Framework; framework_version = $item.Version; target = $ExpectedTarget; project_path = $item.SourceProject; git_sha = $sha; baud = $ExpectedBaud; files = @([ordered]@{ offset = '0x2000'; path = 'bin/one.bin'; size = 24; sha256 = Get-FileSha256 $one; image_chip_id = 18 }, [ordered]@{ offset = '0x10000'; path = 'bin/two.bin'; size = 4; sha256 = Get-FileSha256 $two; image_chip_id = $null }); flash_command = 'esptool write_flash' }
+        $item = $Items[0]; $manifest = [ordered]@{ schema_version = 2; artifact_kind = 'esp-idf-flashable'; profile = $item.Profile; host_only = $true; contains_c6_firmware = $false; name = $item.Name; framework = $item.Framework; framework_version = $item.Version; target = $ExpectedTarget; project_path = $item.SourceProject; git_sha = $sha; baud = $ExpectedBaud; artifact_policy_capacity_bytes = [int64]$ArtifactPolicyCapacity; device_flash_capacity_bytes = [int64]$DeviceFlashCapacity; declared_flash_size_bytes = [int64](2MB); files = @([ordered]@{ offset = '0x2000'; path = 'bin/one.bin'; size = 24; sha256 = Get-FileSha256 $one; image_chip_id = 18 }, [ordered]@{ offset = '0x10000'; path = 'bin/two.bin'; size = 4; sha256 = Get-FileSha256 $two; image_chip_id = $null }); flash_command = 'esptool write_flash' }
         $manifestPath = Join-Path $root 'manifest.json'; $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
         if (@(Test-PackageManifest $root $item $sha).Count -ne 2) { throw 'SelfTest did not hash-verify every planned segment.' }
+        $manifest.files[0].offset = '0x200000'; $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+        $rejected = $false; try { [void](Test-PackageManifest $root $item $sha) } catch { $rejected = $true }; if (-not $rejected) { throw 'SelfTest did not enforce the declared 2 MiB flash size.' }
+        $manifest.files[0].offset = ('0x{0:x}' -f ($DeviceFlashCapacity - 24)); $manifest.declared_flash_size_bytes = [int64](16MB); $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+        if (@(Test-PackageManifest $root $item $sha).Count -ne 2) { throw 'SelfTest did not accept the exact 16 MiB boundary.' }
+        $manifest.files[0].offset = ('0x{0:x}' -f ($DeviceFlashCapacity - 23)); $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+        $rejected = $false; try { [void](Test-PackageManifest $root $item $sha) } catch { $rejected = $true }; if (-not $rejected) { throw 'SelfTest accepted a range past 16 MiB.' }
+        $manifest.files[0].offset = ('0x{0:x}' -f ($DeviceFlashCapacity - 24)); $manifest.declared_flash_size_bytes = $null; $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+        if (@(Test-PackageManifest $root $item $sha).Count -ne 2) { throw 'SelfTest did not apply the physical cap without a declaration.' }
+        $manifest.files[0].offset = '0x2000'; $manifest.artifact_policy_capacity_bytes = [int64](16MB); $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+        $rejected = $false; try { [void](Test-PackageManifest $root $item $sha) } catch { $rejected = $true }; if (-not $rejected) { throw 'SelfTest accepted a changed artifact policy capacity.' }
         Test-HashVerificationOutput "Hash of data verified.`nHash of data verified." 2 0
         $insufficientHashOutput = $false; try { Test-HashVerificationOutput 'Hash of data verified.' 2 0 } catch { $insufficientHashOutput = $true }; if (-not $insufficientHashOutput) { throw 'SelfTest accepted incomplete hash-verification output.' }
         $manifest.flash_command = 'esptool --erase-all write_flash'; $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
         $rejected = $false; try { [void](Test-PackageManifest $root $item $sha) } catch { $rejected = $true }; if (-not $rejected) { throw 'SelfTest did not reject --erase-all.' }
     }
     finally { if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force } }
-    Write-Output 'SELF_TEST_OK items=26 rev1_3=25 rev3_x=1 hashVerifiedSegments=2 eraseAllRejected=true stateVersionReset=true portBoundRecovery=true completedTransition=true jsonRoundTrip=true'
+    Write-Output 'SELF_TEST_OK items=26 rev1_3=25 rev3_x=1 hashVerifiedSegments=2 eraseAllRejected=true capacityContract=true stateVersionReset=true portBoundRecovery=true completedTransition=true jsonRoundTrip=true'
 }
 
 if ($SelfTest) { Invoke-SelfTest; return }
