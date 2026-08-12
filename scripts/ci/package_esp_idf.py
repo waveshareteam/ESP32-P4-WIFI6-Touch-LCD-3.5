@@ -159,10 +159,18 @@ def flatten_config(data: dict[str, Any]) -> dict[str, str]:
             values[key] = "y" if value else "n"
         elif isinstance(value, (str, int)):
             values[key] = str(value).strip().strip('"')
+        else:
+            # Preserve explicit non-Kconfig values so profile validation rejects them.
+            values[key] = str(value).strip().strip('"')
     for key, value in tuple(values.items()):
         if not key.startswith("CONFIG_"):
             values.setdefault(f"CONFIG_{key}", value)
     return values
+
+
+def effective_config_value(values: dict[str, str], key: str) -> str:
+    """Apply Kconfig's implicit disabled-boolean default to JSON build output."""
+    return values.get(key, "n")
 
 
 def reject_c6_content(value: Any, label: str = "flasher metadata") -> None:
@@ -189,7 +197,7 @@ def validate_profile(project: Path, build_dir: Path, profile: str) -> None:
     for key, value in expected.items():
         if profile_values.get(key) != value:
             raise ValueError(f"sdkconfig.defaults.{profile} does not define {key}={value}")
-        if effective_values.get(key) != value:
+        if effective_config_value(effective_values, key) != value:
             raise ValueError(
                 f"build/config/sdkconfig.json does not match {profile}: {key}={value}"
             )

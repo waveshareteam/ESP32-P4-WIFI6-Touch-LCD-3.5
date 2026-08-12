@@ -71,6 +71,36 @@ class PackageEspIdfTests(unittest.TestCase):
             finally:
                 package.REPOSITORY_ROOT = original
 
+    def test_profile_validation_applies_kconfig_disabled_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original = package.REPOSITORY_ROOT
+            package.REPOSITORY_ROOT = root
+            try:
+                args = self.make_project(root)
+                config = root / "example" / "build-rev1_3" / "config" / "sdkconfig.json"
+                config.write_text(
+                    json.dumps(
+                        {
+                            "CONFIG_ESP32P4_SELECTS_REV_LESS_V3": True,
+                            "CONFIG_ESP32P4_REV_MIN_100": "y",
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                package.validate_profile(root / "example", config.parents[1], "rev1_3")
+
+                config.write_text(json.dumps({"CONFIG_ESP32P4_REV_MIN_100": "y"}), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "SELECTS_REV_LESS_V3=y"):
+                    package.validate_profile(root / "example", config.parents[1], "rev1_3")
+
+                args = self.make_project(root, "rev3_x")
+                config = root / "example" / "build-rev3_x" / "config" / "sdkconfig.json"
+                config.write_text(json.dumps({"CONFIG_ESP32P4_REV_MIN_300": True}), encoding="utf-8")
+                package.validate_profile(root / "example", config.parents[1], "rev3_x")
+            finally:
+                package.REPOSITORY_ROOT = original
+
     def test_overlap_capacity_c6_and_erase_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
