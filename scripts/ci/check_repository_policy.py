@@ -139,8 +139,17 @@ def check_example12_lvgl8_managed_bsp_shim(
         return ["Example 12 LVGL 8 managed BSP compatibility shim is missing"]
 
     shim = shim_path.read_text(encoding="utf-8")
-    required_shim = (
+    required_includes = (
+        "#include <stdbool.h>",
+        "#include <stdint.h>",
+        '#include "esp_err.h"',
         '#include "lvgl.h"',
+    )
+    include_positions = tuple(shim.find(token) for token in required_includes)
+    if -1 in include_positions or include_positions != tuple(sorted(include_positions)):
+        errors.append("Example 12 LVGL 8 shim must include bool, uint32_t, and esp_err_t foundations before lvgl.h")
+
+    required_shim = (
         "#if LVGL_VERSION_MAJOR == 8",
         "typedef lv_disp_t lv_display_t;",
         "typedef lv_disp_rot_t lv_disp_rotation_t;",

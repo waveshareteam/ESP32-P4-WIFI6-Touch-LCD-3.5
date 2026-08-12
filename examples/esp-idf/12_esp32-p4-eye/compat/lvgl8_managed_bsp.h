@@ -1,5 +1,9 @@
 #pragma once
 
+#include <stdbool.h>
+#include <stdint.h>
+
+#include "esp_err.h"
 #include "lvgl.h"
 
 #if LVGL_VERSION_MAJOR == 8

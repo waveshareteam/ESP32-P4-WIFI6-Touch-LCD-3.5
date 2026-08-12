@@ -95,6 +95,30 @@ class RevisionProfileTests(unittest.TestCase):
         self.assertTrue(any("exactly its three direct managed BSP consumers" in error for error in errors))
         self.assertTrue(any("public or global" in error for error in errors))
 
+    def test_example12_lvgl8_managed_bsp_shim_policy_rejects_foundations_after_lvgl(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cmake = root / "CMakeLists.txt"
+            shim = root / "lvgl8_managed_bsp.h"
+            cmake.write_text("", encoding="utf-8")
+            shim.write_text(
+                '#include "lvgl.h"\n'
+                "#include <stdbool.h>\n"
+                "#include <stdint.h>\n"
+                '#include "esp_err.h"\n'
+                "#if LVGL_VERSION_MAJOR == 8\n"
+                "typedef lv_disp_t lv_display_t;\n"
+                "typedef lv_disp_rot_t lv_disp_rotation_t;\n"
+                "#elif LVGL_VERSION_MAJOR == 9\n"
+                "#else\n"
+                "#error unsupported\n"
+                "#endif\n",
+                encoding="utf-8",
+            )
+            errors = POLICY.check_example12_lvgl8_managed_bsp_shim(cmake, shim)
+
+        self.assertTrue(any("bool, uint32_t, and esp_err_t foundations" in error for error in errors))
+
 
 if __name__ == "__main__":
     unittest.main()

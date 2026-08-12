@@ -38,8 +38,9 @@
 4. 示例 12 的 21 个 SquareLine 生成图像资源使用 LVGL 8 描述符契约，因此保持
    `lvgl/lvgl 8.3.*`。托管 BSP 提供 `esp_lvgl_adapter`；不要添加未被应用直接使用的
    `esp_lvgl_port` 依赖。仅在示例 12 的托管 BSP、`bsp_extra` 和 `main` 目标解析托管 BSP
-   公共头时，私有强制包含兼容头会将 LVGL 8 的 `lv_disp_t` 和 `lv_disp_rot_t` 拼写映射为
-   BSP 所需类型；它不会恢复本地 BSP，也不会传播到其他示例、目标或全局设置。迁移到 LVGL 9
-   前必须重新生成并审计完整 UI。
+   公共头时，私有强制包含兼容头会先提供托管公共头缺少的 ESP-IDF/基础 `bool`、`uint32_t`
+   与 `esp_err_t` 类型，再将 LVGL 8 的 `lv_disp_t` 和 `lv_disp_rot_t` 拼写映射为 BSP 所需
+   类型；它不会恢复本地 BSP，也不会传播到其他示例、目标或全局设置。迁移到 LVGL 9 前必须
+   重新生成并审计完整 UI。
 5. 以提交后的 GitHub Actions 矩阵作为编译证据。构建通过不是硬件在环（HIL）证据，
    不能替代实机验证。

@@ -48,10 +48,12 @@ claim that those hardware controls are implemented.
 4. Keep Example 12 on `lvgl/lvgl 8.3.*` while its 21 SquareLine-generated image
    assets use the LVGL 8 descriptor contract. The managed BSP supplies
    `esp_lvgl_adapter`; do not add an unused direct `esp_lvgl_port` dependency.
-   A private forced-include compatibility header maps LVGL 8's `lv_disp_t` and
-   `lv_disp_rot_t` spellings only while parsing the managed BSP public header in
-   Example 12's managed BSP, `bsp_extra`, and `main` targets. It neither restores
-   a local BSP nor propagates to other examples, targets, or global settings.
+   A private forced-include compatibility header supplies the ESP-IDF/basic
+   `bool`, `uint32_t`, and `esp_err_t` types missing from the managed public
+   header, then maps LVGL 8's `lv_disp_t` and `lv_disp_rot_t` spellings while it
+   is parsed in Example 12's managed BSP, `bsp_extra`, and `main` targets. It
+   neither restores a local BSP nor propagates to other examples, targets, or
+   global settings.
    Migrating to LVGL 9 requires regenerating and auditing the complete UI.
 5. Use the post-commit GitHub Actions matrix as compile evidence. A green build
    is not HIL evidence and does not replace physical-hardware validation.
