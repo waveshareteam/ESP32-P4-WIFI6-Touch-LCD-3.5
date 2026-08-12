@@ -14,6 +14,9 @@ EXAMPLES = ROOT / "examples" / "esp-idf"
 PROFILE_CONFIG = ROOT / "config" / "revision-profiles.json"
 EXAMPLE12_MANIFEST = EXAMPLES / "12_esp32-p4-eye" / "main" / "idf_component.yml"
 EXAMPLE12_IMAGES = EXAMPLES / "12_esp32-p4-eye" / "main" / "ui" / "images"
+EXAMPLE12_CMAKE = EXAMPLES / "12_esp32-p4-eye" / "CMakeLists.txt"
+EXAMPLE12_LVGL8_MANAGED_BSP_SHIM = EXAMPLES / "12_esp32-p4-eye" / "compat" / "lvgl8_managed_bsp.h"
+EXAMPLE12_MANAGED_BSP_TARGET = "waveshare__esp32_p4_wifi6_touch_lcd_3_5"
 
 
 def load_policy() -> dict[str, object]:
@@ -123,6 +126,42 @@ def check_example12_lvgl_contract(
     return errors
 
 
+def check_example12_lvgl8_managed_bsp_shim(
+    cmake_path: Path = EXAMPLE12_CMAKE,
+    shim_path: Path = EXAMPLE12_LVGL8_MANAGED_BSP_SHIM,
+) -> list[str]:
+    errors: list[str] = []
+    if not shim_path.is_file():
+        return ["Example 12 LVGL 8 managed BSP compatibility shim is missing"]
+
+    shim = shim_path.read_text(encoding="utf-8")
+    required_shim = (
+        '#include "lvgl.h"',
+        "#if LVGL_VERSION_MAJOR == 8",
+        "typedef lv_disp_t lv_display_t;",
+        "typedef lv_disp_rot_t lv_disp_rotation_t;",
+        "#elif LVGL_VERSION_MAJOR == 9",
+        "#error",
+    )
+    if any(token not in shim for token in required_shim):
+        errors.append("Example 12 LVGL 8 shim must guard the required LVGL type aliases")
+
+    cmake = cmake_path.read_text(encoding="utf-8")
+    target_lookup = (
+        f"idf_component_get_property(lvgl8_managed_bsp_target\n"
+        f"    {EXAMPLE12_MANAGED_BSP_TARGET} COMPONENT_LIB)"
+    )
+    private_option = (
+        'target_compile_options("${lvgl8_managed_bsp_target}" PRIVATE\n'
+        '    "SHELL:-include \\"${lvgl8_managed_bsp_shim}\\"")'
+    )
+    if target_lookup not in cmake or private_option not in cmake:
+        errors.append("Example 12 must privately force-include the shim on the exact managed BSP target")
+    if any(token in cmake for token in ("add_compile_options(", "include_directories(", "target_compile_options(PUBLIC", "target_compile_options(INTERFACE")):
+        errors.append("Example 12 LVGL 8 managed BSP shim must not use public or global compile settings")
+    return errors
+
+
 def check_workflows() -> list[str]:
     errors = []
     examples = (ROOT / ".github" / "workflows" / "esp-idf.yml").read_text(encoding="utf-8")
@@ -158,6 +197,7 @@ def main() -> int:
         errors.extend(check_profiles(policy))
         errors.extend(check_bsp(policy))
         errors.extend(check_example12_lvgl_contract())
+        errors.extend(check_example12_lvgl8_managed_bsp_shim())
         errors.extend(check_workflows())
     for error in errors:
         print(f"policy: {error}", file=sys.stderr)

@@ -72,6 +72,28 @@ class RevisionProfileTests(unittest.TestCase):
         self.assertTrue(any("must not directly depend" in error for error in errors))
         self.assertTrue(any("must retain 21" in error for error in errors))
 
+    def test_example12_lvgl8_managed_bsp_shim_policy_rejects_leaks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            cmake = root / "CMakeLists.txt"
+            shim = root / "lvgl8_managed_bsp.h"
+            cmake.write_text(
+                "idf_component_get_property(lvgl8_managed_bsp_target\n"
+                "    wrong__bsp COMPONENT_LIB)\n"
+                "add_compile_options(-include broken.h)\n"
+                "target_compile_options(\"${lvgl8_managed_bsp_target}\" PUBLIC\n"
+                "    \"SHELL:-include \\\"${lvgl8_managed_bsp_shim}\\\"\")\n",
+                encoding="utf-8",
+            )
+            shim.write_text(
+                '#include "lvgl.h"\ntypedef lv_disp_t lv_display_t;\n', encoding="utf-8"
+            )
+            errors = POLICY.check_example12_lvgl8_managed_bsp_shim(cmake, shim)
+
+        self.assertTrue(any("must guard" in error for error in errors))
+        self.assertTrue(any("exact managed BSP target" in error for error in errors))
+        self.assertTrue(any("public or global" in error for error in errors))
+
 
 if __name__ == "__main__":
     unittest.main()

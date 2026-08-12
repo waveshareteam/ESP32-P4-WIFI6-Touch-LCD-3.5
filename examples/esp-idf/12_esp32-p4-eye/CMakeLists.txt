@@ -10,6 +10,23 @@ set(COMPONENTS main)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(factory_demo VERSION 1.0.0)
 
+# The managed BSP 2.0.0 uses LVGL 9 spellings while Example 12 intentionally
+# remains on LVGL 8 for its SquareLine-generated UI assets. Force this private
+# compatibility header into the managed BSP only; it must not affect the app or
+# any other managed component.
+set(lvgl8_managed_bsp_shim
+    "${CMAKE_CURRENT_LIST_DIR}/compat/lvgl8_managed_bsp.h"
+)
+idf_component_get_property(lvgl8_managed_bsp_target
+    waveshare__esp32_p4_wifi6_touch_lcd_3_5 COMPONENT_LIB)
+if(NOT lvgl8_managed_bsp_target
+   OR NOT TARGET "${lvgl8_managed_bsp_target}"
+   OR NOT EXISTS "${lvgl8_managed_bsp_shim}")
+    message(FATAL_ERROR "LVGL 8 managed BSP compatibility inputs are unavailable")
+endif()
+target_compile_options("${lvgl8_managed_bsp_target}" PRIVATE
+    "SHELL:-include \"${lvgl8_managed_bsp_shim}\"")
+
 # The application provides its own TinyUSB MSC storage callbacks in app_storage.c.
 # Keep the MSC class enabled, but do not compile esp_tinyusb's unused IDF 5
 # storage helper, whose legacy FATFS registration API is unavailable in IDF 6.
