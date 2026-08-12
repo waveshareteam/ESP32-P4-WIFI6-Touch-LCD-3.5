@@ -13,6 +13,10 @@ ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES = ROOT / "examples" / "esp-idf"
 PROFILE_CONFIG = ROOT / "config" / "revision-profiles.json"
 EXAMPLE10_MANIFEST = EXAMPLES / "10_mp4_player" / "main" / "idf_component.yml"
+EXAMPLE09_VIDEO_HEADER = EXAMPLES / "09_video_lcd_display" / "main" / "app_video.h"
+EXAMPLE09_DEFAULTS = EXAMPLES / "09_video_lcd_display" / "sdkconfig.defaults"
+EXAMPLE10_MAIN = EXAMPLES / "10_mp4_player" / "main" / "main.c"
+EXAMPLE10_DEFAULTS = EXAMPLES / "10_mp4_player" / "sdkconfig.defaults"
 EXAMPLE12_MANIFEST = EXAMPLES / "12_esp32-p4-eye" / "main" / "idf_component.yml"
 EXAMPLE12_IMAGES = EXAMPLES / "12_esp32-p4-eye" / "main" / "ui" / "images"
 EXAMPLE12_CMAKE = EXAMPLES / "12_esp32-p4-eye" / "CMakeLists.txt"
@@ -22,6 +26,24 @@ EXAMPLE12_LVGL8_MANAGED_BSP_COMPONENTS = (
     "bsp_extra",
     "main",
 )
+REMOVED_MANAGED_BSP_DISPLAY_SYMBOLS = (
+    "CONFIG_BSP_LCD_" + "COLOR_FORMAT",
+    "CONFIG_BSP_LCD_" + "DPI_BUFFER_NUMS",
+)
+FIRST_PARTY_ESP_IDF_SOURCE_CONFIG_SUFFIXES = {
+    ".c",
+    ".cc",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".cmake",
+    ".conf",
+    ".defaults",
+    ".json",
+    ".txt",
+    ".yml",
+    ".yaml",
+}
 
 
 def load_policy() -> dict[str, object]:
@@ -113,6 +135,49 @@ def check_example10_audio_codec_contract(manifest_path: Path = EXAMPLE10_MANIFES
     ):
         return ["Example 10 must keep espressif/esp_audio_codec at >=2.3.0,<2.6.0 for the rev1_3 default"]
     return []
+
+
+def check_display_config_contract(
+    example09_header: Path = EXAMPLE09_VIDEO_HEADER,
+    example09_defaults: Path = EXAMPLE09_DEFAULTS,
+    example10_main: Path = EXAMPLE10_MAIN,
+    example10_defaults: Path = EXAMPLE10_DEFAULTS,
+) -> list[str]:
+    errors: list[str] = []
+    example09_header_text = example09_header.read_text(encoding="utf-8")
+    example10_main_text = example10_main.read_text(encoding="utf-8")
+    if not re.search(r"^#define APP_VIDEO_FMT\s+\(APP_VIDEO_FMT_RGB565\)\s*$", example09_header_text, re.MULTILINE):
+        errors.append("Example 09 must unconditionally set APP_VIDEO_FMT to APP_VIDEO_FMT_RGB565")
+    if not re.search(r"^#define APP_LCD_BUFFER_COUNT\s+2\s*$", example10_main_text, re.MULTILINE):
+        errors.append("Example 10 must define APP_LCD_BUFFER_COUNT as 2")
+    required_uses = (
+        "static void *lcd_buffer[APP_LCD_BUFFER_COUNT];",
+        "buffer_index < APP_LCD_BUFFER_COUNT",
+        ".buffer_count = APP_LCD_BUFFER_COUNT,",
+    )
+    if any(token not in example10_main_text for token in required_uses):
+        errors.append("Example 10 must use APP_LCD_BUFFER_COUNT for every display-buffer callsite")
+    return errors
+
+
+def is_first_party_esp_idf_source_or_config(path: Path) -> bool:
+    return (
+        path.suffix in FIRST_PARTY_ESP_IDF_SOURCE_CONFIG_SUFFIXES
+        or path.name.startswith("sdkconfig.defaults")
+        or path.name.startswith("Kconfig")
+    )
+
+
+def check_removed_managed_bsp_display_symbols(examples: Path = EXAMPLES) -> list[str]:
+    errors: list[str] = []
+    for path in sorted(examples.rglob("*")):
+        if not path.is_file() or not is_first_party_esp_idf_source_or_config(path):
+            continue
+        text = path.read_text(encoding="utf-8")
+        if any(symbol in text for symbol in REMOVED_MANAGED_BSP_DISPLAY_SYMBOLS):
+            display_name = path.relative_to(ROOT) if path.is_relative_to(ROOT) else path
+            errors.append(f"{display_name} retains removed BSP display Kconfig symbols")
+    return errors
 
 
 def check_example12_lvgl_contract(
@@ -231,6 +296,8 @@ def main() -> int:
         errors.extend(check_profiles(policy))
         errors.extend(check_bsp(policy))
         errors.extend(check_example10_audio_codec_contract())
+        errors.extend(check_display_config_contract())
+        errors.extend(check_removed_managed_bsp_display_symbols())
         errors.extend(check_example12_lvgl_contract())
         errors.extend(check_example12_lvgl8_managed_bsp_shim())
         errors.extend(check_workflows())

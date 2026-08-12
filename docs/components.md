@@ -37,6 +37,15 @@ pre-migration inert or `SDMMC_SLOT_NO_CD` behavior because the managed BSP does
 not expose corresponding GPIO-backed APIs. They are compatibility shims, not a
 claim that those hardware controls are implemented.
 
+### Display configuration contract
+
+The official BSP 2.0.0 immutable public header fixes the display to RGB565,
+big-endian color order, and 16 bits per pixel. Example 09 therefore owns an
+unconditional RGB565 video-format contract instead of selecting a removed BSP
+Kconfig color-format option. Example 10 owns `APP_LCD_BUFFER_COUNT` fixed at 2
+instead of a removed DPI-buffer Kconfig option. These source contracts do not
+claim hardware-in-the-loop validation.
+
 ## Dependency update rules
 
 1. Prefer a bounded compatible range for ordinary managed libraries and an

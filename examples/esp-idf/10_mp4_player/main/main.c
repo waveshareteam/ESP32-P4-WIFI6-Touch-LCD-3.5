@@ -18,11 +18,12 @@ static const char *TAG = "main";
 
 #define DISPLAY_BUFFER_SIZE (BSP_LCD_H_RES * BSP_LCD_V_RES * 2)
 #define DISPLAY_CHUNK_LINES            (10)
+#define APP_LCD_BUFFER_COUNT            2
 #define MP4_FILENAME         CONFIG_BSP_SD_MOUNT_POINT "/" CONFIG_MP4_FILENAME
 
 static esp_lcd_panel_handle_t lcd_panel;
 static esp_lcd_panel_io_handle_t lcd_io;
-static void *lcd_buffer[CONFIG_BSP_LCD_DPI_BUFFER_NUMS];
+static void *lcd_buffer[APP_LCD_BUFFER_COUNT];
 static app_stream_adapter_handle_t stream_adapter;
 static esp_codec_dev_handle_t g_audio_dev = NULL;
 static SemaphoreHandle_t g_lcd_flush_sem;
@@ -171,7 +172,7 @@ static esp_err_t allocate_decode_buffers(uint32_t *decode_buffer_size)
     };
 
     size_t out_size = 0;
-    for (int buffer_index = 0; buffer_index < CONFIG_BSP_LCD_DPI_BUFFER_NUMS; buffer_index++) {
+    for (int buffer_index = 0; buffer_index < APP_LCD_BUFFER_COUNT; buffer_index++) {
         lcd_buffer[buffer_index] = jpeg_alloc_decoder_mem(DISPLAY_BUFFER_SIZE, &mem_cfg, &out_size);
         if (lcd_buffer[buffer_index] == NULL) {
             ESP_LOGE(TAG, "Failed to allocate display buffer %d", buffer_index);
@@ -204,7 +205,7 @@ static esp_err_t init_stream_adapter(uint32_t decode_buffer_size)
         .frame_cb = display_decoded_frame,
         .user_data = NULL,
         .decode_buffers = lcd_buffer,
-        .buffer_count = CONFIG_BSP_LCD_DPI_BUFFER_NUMS,
+        .buffer_count = APP_LCD_BUFFER_COUNT,
         .buffer_size = decode_buffer_size,
         .audio_dev = g_audio_dev,
         .jpeg_config = {

@@ -63,6 +63,35 @@ class RevisionProfileTests(unittest.TestCase):
 
         self.assertTrue(any(">=2.3.0,<2.6.0" in error for error in errors))
 
+    def test_display_config_policy_rejects_removed_bsp_symbols(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            stale_defaults = root / "11_any_first_party_example" / "sdkconfig.defaults"
+            stale_defaults.parent.mkdir()
+            stale_defaults.write_text("CONFIG_BSP_LCD_" "DPI_BUFFER_NUMS=3\n", encoding="utf-8")
+            errors = POLICY.check_removed_managed_bsp_display_symbols(root)
+
+        self.assertTrue(any("retains removed BSP display Kconfig symbols" in error for error in errors))
+
+    def test_display_config_policy_rejects_incomplete_app_buffer_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            example09_header = root / "app_video.h"
+            example09_defaults = root / "example09.defaults"
+            example10_main = root / "main.c"
+            example10_defaults = root / "example10.defaults"
+            example09_header.write_text("#define APP_VIDEO_FMT (APP_VIDEO_FMT_RGB888)\n", encoding="utf-8")
+            example09_defaults.write_text("", encoding="utf-8")
+            example10_main.write_text("#define APP_LCD_BUFFER_COUNT 3\n", encoding="utf-8")
+            example10_defaults.write_text("", encoding="utf-8")
+            errors = POLICY.check_display_config_contract(
+                example09_header, example09_defaults, example10_main, example10_defaults
+            )
+
+        self.assertTrue(any("APP_VIDEO_FMT" in error for error in errors))
+        self.assertTrue(any("APP_LCD_BUFFER_COUNT as 2" in error for error in errors))
+        self.assertTrue(any("every display-buffer callsite" in error for error in errors))
+
     def test_example12_lvgl_policy_rejects_direct_port_and_invalid_assets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
