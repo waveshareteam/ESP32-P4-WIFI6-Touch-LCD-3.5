@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES = ROOT / "examples" / "esp-idf"
 PROFILE_CONFIG = ROOT / "config" / "revision-profiles.json"
+EXAMPLE10_MANIFEST = EXAMPLES / "10_mp4_player" / "main" / "idf_component.yml"
 EXAMPLE12_MANIFEST = EXAMPLES / "12_esp32-p4-eye" / "main" / "idf_component.yml"
 EXAMPLE12_IMAGES = EXAMPLES / "12_esp32-p4-eye" / "main" / "ui" / "images"
 EXAMPLE12_CMAKE = EXAMPLES / "12_esp32-p4-eye" / "CMakeLists.txt"
@@ -102,6 +103,16 @@ def manifest_dependency_block(text: str, dependency: str) -> str | None:
         rf"(?ms)^  {re.escape(dependency)}:\n(?P<body>.*?)(?=^  \S|\Z)", text
     )
     return match.group("body") if match else None
+
+
+def check_example10_audio_codec_contract(manifest_path: Path = EXAMPLE10_MANIFEST) -> list[str]:
+    manifest = manifest_path.read_text(encoding="utf-8")
+    audio_codec = manifest_dependency_block(manifest, "espressif/esp_audio_codec")
+    if audio_codec is None or not re.search(
+        r'^    version:\s*">=2\.3\.0,<2\.6\.0"\s*$', audio_codec, re.MULTILINE
+    ):
+        return ["Example 10 must keep espressif/esp_audio_codec at >=2.3.0,<2.6.0 for the rev1_3 default"]
+    return []
 
 
 def check_example12_lvgl_contract(
@@ -219,6 +230,7 @@ def main() -> int:
     if not args.arduino_only:
         errors.extend(check_profiles(policy))
         errors.extend(check_bsp(policy))
+        errors.extend(check_example10_audio_codec_contract())
         errors.extend(check_example12_lvgl_contract())
         errors.extend(check_example12_lvgl8_managed_bsp_shim())
         errors.extend(check_workflows())

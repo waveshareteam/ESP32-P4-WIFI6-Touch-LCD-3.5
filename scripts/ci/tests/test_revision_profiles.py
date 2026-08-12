@@ -49,6 +49,20 @@ class RevisionProfileTests(unittest.TestCase):
         completed = subprocess.run([sys.executable, str(SCRIPT_DIR / "check_repository_policy.py")], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.assertEqual(completed.returncode, 0, completed.stderr)
 
+    def test_example10_audio_codec_policy_rejects_v2_6_compatible_range(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = Path(directory) / "idf_component.yml"
+            manifest.write_text(
+                "dependencies:\n"
+                "  espressif/esp_audio_codec:\n"
+                '    version: "^2.3.0"\n'
+                "    public: true\n",
+                encoding="utf-8",
+            )
+            errors = POLICY.check_example10_audio_codec_contract(manifest)
+
+        self.assertTrue(any(">=2.3.0,<2.6.0" in error for error in errors))
+
     def test_example12_lvgl_policy_rejects_direct_port_and_invalid_assets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
