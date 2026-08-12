@@ -16,7 +16,11 @@ EXAMPLE12_MANIFEST = EXAMPLES / "12_esp32-p4-eye" / "main" / "idf_component.yml"
 EXAMPLE12_IMAGES = EXAMPLES / "12_esp32-p4-eye" / "main" / "ui" / "images"
 EXAMPLE12_CMAKE = EXAMPLES / "12_esp32-p4-eye" / "CMakeLists.txt"
 EXAMPLE12_LVGL8_MANAGED_BSP_SHIM = EXAMPLES / "12_esp32-p4-eye" / "compat" / "lvgl8_managed_bsp.h"
-EXAMPLE12_MANAGED_BSP_TARGET = "waveshare__esp32_p4_wifi6_touch_lcd_3_5"
+EXAMPLE12_LVGL8_MANAGED_BSP_COMPONENTS = (
+    "waveshare__esp32_p4_wifi6_touch_lcd_3_5",
+    "bsp_extra",
+    "main",
+)
 
 
 def load_policy() -> dict[str, object]:
@@ -147,16 +151,26 @@ def check_example12_lvgl8_managed_bsp_shim(
         errors.append("Example 12 LVGL 8 shim must guard the required LVGL type aliases")
 
     cmake = cmake_path.read_text(encoding="utf-8")
-    target_lookup = (
-        f"idf_component_get_property(lvgl8_managed_bsp_target\n"
-        f"    {EXAMPLE12_MANAGED_BSP_TARGET} COMPONENT_LIB)"
+    targets = re.search(
+        r"(?ms)^set\(lvgl8_managed_bsp_components\s*(?P<targets>.*?)^\)", cmake
     )
-    private_option = (
-        'target_compile_options("${lvgl8_managed_bsp_target}" PRIVATE\n'
-        '    "SHELL:-include \\"${lvgl8_managed_bsp_shim}\\"")'
+    configured_components = (
+        tuple(re.findall(r"(?m)^\s*([A-Za-z0-9_]+)\s*$", targets.group("targets")))
+        if targets
+        else ()
     )
-    if target_lookup not in cmake or private_option not in cmake:
-        errors.append("Example 12 must privately force-include the shim on the exact managed BSP target")
+    if configured_components != EXAMPLE12_LVGL8_MANAGED_BSP_COMPONENTS:
+        errors.append("Example 12 must list exactly the managed BSP, bsp_extra, and main LVGL 8 shim consumers")
+
+    required_loop = (
+        "foreach(lvgl8_managed_bsp_component IN LISTS lvgl8_managed_bsp_components)",
+        'idf_component_get_property(lvgl8_managed_bsp_target\n        "${lvgl8_managed_bsp_component}" COMPONENT_LIB)',
+        'NOT TARGET "${lvgl8_managed_bsp_target}"',
+        'target_compile_options("${lvgl8_managed_bsp_target}" PRIVATE\n        "SHELL:-include \\"${lvgl8_managed_bsp_shim}\\"")',
+        "endforeach()",
+    )
+    if any(token not in cmake for token in required_loop):
+        errors.append("Example 12 must privately force-include the shim on exactly its three direct managed BSP consumers")
     if any(token in cmake for token in ("add_compile_options(", "include_directories(", "target_compile_options(PUBLIC", "target_compile_options(INTERFACE")):
         errors.append("Example 12 LVGL 8 managed BSP shim must not use public or global compile settings")
     return errors

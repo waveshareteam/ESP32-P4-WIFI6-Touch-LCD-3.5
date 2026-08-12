@@ -49,9 +49,9 @@ claim that those hardware controls are implemented.
    assets use the LVGL 8 descriptor contract. The managed BSP supplies
    `esp_lvgl_adapter`; do not add an unused direct `esp_lvgl_port` dependency.
    A private forced-include compatibility header maps LVGL 8's `lv_disp_t` and
-   `lv_disp_rot_t` spellings only while compiling the online managed BSP; it
-   neither restores a local BSP nor affects application or other component
-   targets. Migrating to LVGL 9 requires regenerating and auditing the complete
-   UI.
+   `lv_disp_rot_t` spellings only while parsing the managed BSP public header in
+   Example 12's managed BSP, `bsp_extra`, and `main` targets. It neither restores
+   a local BSP nor propagates to other examples, targets, or global settings.
+   Migrating to LVGL 9 requires regenerating and auditing the complete UI.
 5. Use the post-commit GitHub Actions matrix as compile evidence. A green build
    is not HIL evidence and does not replace physical-hardware validation.

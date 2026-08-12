@@ -91,7 +91,8 @@ class RevisionProfileTests(unittest.TestCase):
             errors = POLICY.check_example12_lvgl8_managed_bsp_shim(cmake, shim)
 
         self.assertTrue(any("must guard" in error for error in errors))
-        self.assertTrue(any("exact managed BSP target" in error for error in errors))
+        self.assertTrue(any("exactly the managed BSP, bsp_extra, and main" in error for error in errors))
+        self.assertTrue(any("exactly its three direct managed BSP consumers" in error for error in errors))
         self.assertTrue(any("public or global" in error for error in errors))
 
 
