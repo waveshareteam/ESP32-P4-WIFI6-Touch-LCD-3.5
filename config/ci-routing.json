@@ -5,7 +5,9 @@
     "config/ci-routing.json",
     "scripts/check_readme.py"
   ],
-  "documentation_asset_patterns": [],
+  "documentation_asset_patterns": [
+    "assets/ESP32-P4-WIFI6-Touch-LCD-3.5-details-1.jpg"
+  ],
   "ignore_build_patterns": [
     ".gitignore"
   ],
@@ -13,7 +15,8 @@
   "esp_idf_shared_patterns": [],
   "arduino_shared_patterns": [],
   "esp_idf_global_patterns": [
-    "config/revision-profiles.json"
+    "config/revision-profiles.json",
+    "example/ESP-IDF/**"
   ],
   "arduino_global_patterns": [],
   "global_build_patterns": [
