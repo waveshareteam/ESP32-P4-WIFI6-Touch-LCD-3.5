@@ -180,7 +180,8 @@ extern "C" {
         );
 
     }
-    void hour_Animation(lv_obj_t *TargetObject, int delay)
+
+void hour_Animation(lv_obj_t *TargetObject, int delay)
     {
         ui_anim_user_data_t *PropertyAnimation_0_user_data = (ui_anim_user_data_t *)lv_malloc(sizeof(ui_anim_user_data_t));
         PropertyAnimation_0_user_data->target = TargetObject;
