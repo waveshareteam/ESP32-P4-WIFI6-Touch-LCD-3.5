@@ -16,7 +16,7 @@ firmware compilation so every required check has a stable meaning.
   maintained product source once for each revision profile when conservative
   routing says that product firmware is affected.
 - [`arduino-policy.yml`](../.github/workflows/arduino-policy.yml) enforces the
-  current zero-sketch inventory and future `ChipVariant=prev3` default without
+  current zero-sketch inventory and future `ChipVariant=postv3` default without
   claiming an Arduino compile.
 - [`repository-policy.yml`](../.github/workflows/repository-policy.yml) runs the
   deterministic profile, packaging, routing, and Windows flasher contracts.
@@ -66,10 +66,10 @@ stable ESP-IDF tags:
 - `v6.0.2`
 
 The standard example matrix is 12 projects × 2 ESP-IDF versions = 24 builds;
-all of those builds use the `rev1_3` profile. It is not doubled for every
+all of those builds use the `rev3_x` profile. It is not doubled for every
 silicon-revision profile. The current Arduino inventory is zero, so the
 repository does not claim or run an Arduino build. Its default Arduino policy,
-if an Arduino surface is added later, is `ChipVariant=prev3`.
+if an Arduino surface is added later, is `ChipVariant=postv3`.
 
 The matrix uses `fail-fast: false` and a bounded parallelism of six. Component
 Manager downloads and ccache data are isolated by runner OS, ESP-IDF version,
@@ -77,19 +77,33 @@ target, project, and dependency-manifest hash.
 
 ## ESP32-P4 revision profiles
 
-The default ESP-IDF profile is `rev1_3` (pre-v3 silicon):
-
-- `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y`
-- `CONFIG_ESP32P4_REV_MIN_100=y`
-
-The `rev3_x` profile is for v3-or-later silicon:
+The default ESP-IDF profile for fresh example configurations is `rev3_x`
+(rev3.x silicon, `[3.0, 4.0)`):
 
 - `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=n`
 - `CONFIG_ESP32P4_REV_MIN_300=y`
 
+The explicit `rev1_3` compatibility profile is for confirmed rev1.x silicon
+(`[1.0, 2.0)`, including rev1.3):
+
+- `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y`
+- `CONFIG_ESP32P4_REV_MIN_100=y`
+
+To select `rev1_3` locally, configure a separate build directory from the
+example project directory:
+
+```text
+idf.py -B build-rev1_3 -D SDKCONFIG=sdkconfig.rev1_3 -D WAVESHARE_REVISION_PROFILE=rev1_3 set-target esp32p4
+idf.py -B build-rev1_3 -D SDKCONFIG=sdkconfig.rev1_3 -D WAVESHARE_REVISION_PROFILE=rev1_3 build
+```
+
 Profiles have independent SDK configuration files and build directories. Their
-binaries are incompatible and must not be substituted for one another. The
-maintained product source is
+names identify ESP32-P4 silicon rather than PCB or product hardware revision;
+binaries are incompatible and must not be substituted for one another. Both
+supported IDF lines generate `CONFIG_ESP32P4_REV_MAX_FULL=199` for `rev1_3`,
+so the historical `SELECTS_REV_LESS_V3` name does not make 2.x silicon
+compatible. Revisions outside `[1.0, 2.0)` and `[3.0, 4.0)` are unsupported and
+the flasher rejects them. The maintained product source is
 [`12_esp32-p4-eye`](../examples/esp-idf/12_esp32-p4-eye/): on ESP-IDF v6.0.2 it
 produces separate `rev1_3` and `rev3_x` product jobs and artifacts. This is a
 product-specific compatibility surface, not a second matrix for every example.
@@ -141,8 +155,8 @@ Artifacts are retained for 14 days. Paths are validated to remain inside the
 selected profile's build directory before packaging.
 
 The generated flasher probes, then re-probes, the ESP32-P4 silicon revision
-before flashing: silicon revision below 3 accepts only `rev1_3`, while revision
-3 or later accepts only `rev3_x`. Silicon revision identifies neither the PCB
+before flashing: `[1.0, 2.0)` accepts only `rev1_3`, while `[3.0, 4.0)` accepts
+only `rev3_x`; every other revision is rejected. Silicon revision identifies neither the PCB
 revision nor the board's electrical revision.
 
 ## Windows CI firmware test flow
@@ -161,9 +175,9 @@ environment containing `esptool`. It accepts only successful Actions runs and
 profile-qualified artifacts whose SHA exactly matches the local branch and the
 open Ready-for-review pull request. `-ListOnly` reports the complete 26-item
 contract: 24 default-profile example artifacts plus the two maintained-product
-profiles. At runtime, pre-v3 silicon selects the 24 examples and the `rev1_3`
-product artifact (25 items); v3-or-later silicon selects only the `rev3_x`
-product artifact.
+profiles. At runtime, rev3.x silicon selects the 24 examples and the
+`rev3_x` product artifact (25 items); rev1.x silicon selects only the explicit
+`rev1_3` product artifact.
 
 The tool downloads and validates one artifact, re-probes the chip, writes only
 the manifest flash plan, and then stops. It never advances automatically: test

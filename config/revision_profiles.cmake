@@ -1,6 +1,6 @@
 # Central ESP32-P4 silicon-revision defaults for every first-party ESP-IDF app.
 function(waveshare_configure_revision_profile project_dir)
-    set(WAVESHARE_REVISION_PROFILE "rev1_3" CACHE STRING
+    set(WAVESHARE_REVISION_PROFILE "rev3_x" CACHE STRING
         "ESP32-P4 revision profile (rev1_3 or rev3_x)")
     set_property(CACHE WAVESHARE_REVISION_PROFILE PROPERTY STRINGS rev1_3 rev3_x)
 

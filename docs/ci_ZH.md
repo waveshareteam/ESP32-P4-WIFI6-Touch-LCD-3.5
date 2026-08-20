@@ -13,7 +13,7 @@
 - [`product-firmware.yml`](../.github/workflows/product-firmware.yml) 在保守路由判断产品
   固件受影响时，为维护的产品源码分别构建两个芯片版本配置。
 - [`arduino-policy.yml`](../.github/workflows/arduino-policy.yml) 检查当前零 sketch 清单和
-  未来 `ChipVariant=prev3` 默认值，不声称执行过 Arduino 编译。
+  未来 `ChipVariant=postv3` 默认值，不声称执行过 Arduino 编译。
 - [`repository-policy.yml`](../.github/workflows/repository-policy.yml) 执行确定性的配置、
   打包、路由和 Windows 烧录器契约测试。
 
@@ -53,26 +53,37 @@ merge-base diff。遇到空范围、格式错误或不安全路径时会直接�
 - `v5.5.5`
 - `v6.0.2`
 
-标准示例矩阵为 12 个工程 × 2 个 ESP-IDF 版本 = 24 次构建，且全部使用 `rev1_3`
+标准示例矩阵为 12 个工程 × 2 个 ESP-IDF 版本 = 24 次构建，且全部使用 `rev3_x`
 配置；不会为每个硅版本配置重复一套矩阵。当前 Arduino 清单为零，因此仓库不会声称或
-运行 Arduino 构建。若以后加入 Arduino 表面，默认策略为 `ChipVariant=prev3`。
+运行 Arduino 构建。若以后加入 Arduino 表面，默认策略为 `ChipVariant=postv3`。
 
 矩阵设置 `fail-fast: false`，最大并行数为 6。组件管理器下载与 ccache 会按运行器系统、
 ESP-IDF 版本、目标、工程及依赖 manifest 哈希隔离。
 
 ## ESP32-P4 芯片版本配置
 
-默认 ESP-IDF 配置为 `rev1_3`（v3 之前的芯片）：
-
-- `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y`
-- `CONFIG_ESP32P4_REV_MIN_100=y`
-
-`rev3_x` 配置用于 v3 或之后的芯片：
+新建示例配置默认使用 `rev3_x`（rev3.x 芯片，`[3.0, 4.0)`）：
 
 - `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=n`
 - `CONFIG_ESP32P4_REV_MIN_300=y`
 
-不同配置使用独立的 sdkconfig 和构建目录，生成的二进制互不兼容，不能互相替用。维护的
+显式 `rev1_3` 兼容 profile 用于已确认的 rev1.x 芯片（`[1.0, 2.0)`，包括 rev1.3）：
+
+- `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y`
+- `CONFIG_ESP32P4_REV_MIN_100=y`
+
+如需在本地选择 `rev1_3`，请在示例工程目录使用独立构建目录：
+
+```text
+idf.py -B build-rev1_3 -D SDKCONFIG=sdkconfig.rev1_3 -D WAVESHARE_REVISION_PROFILE=rev1_3 set-target esp32p4
+idf.py -B build-rev1_3 -D SDKCONFIG=sdkconfig.rev1_3 -D WAVESHARE_REVISION_PROFILE=rev1_3 build
+```
+
+不同配置使用独立的 sdkconfig 和构建目录，名称表示 ESP32-P4 芯片而不是 PCB 或产品硬件
+revision，生成的二进制互不兼容，不能互相替用。两条受支持的 IDF 版本线都会为
+`rev1_3` 生成 `CONFIG_ESP32P4_REV_MAX_FULL=199`，因此历史符号
+`SELECTS_REV_LESS_V3` 并不表示兼容 2.x。烧录器会拒绝 `[1.0, 2.0)` 与
+`[3.0, 4.0)` 之外的 revision。维护的
 产品源码为 [`12_esp32-p4-eye`](../examples/esp-idf/12_esp32-p4-eye/)，它在 ESP-IDF
 v6.0.2 上产生独立的 `rev1_3` 与 `rev3_x` 产品任务和制品。这是产品专用兼容面，
 不是将每个示例矩阵翻倍。
@@ -113,8 +124,9 @@ schema-2 manifest 会记录这三项值，Windows 烧录器也会独立执行相
 
 制品保留 14 天。打包前会验证所有路径都位于所选配置的 build 目录内部。
 
-生成的烧录器会在烧录前探测并再次探测 ESP32-P4 芯片版本：芯片版本低于 3 时仅接受
-`rev1_3`，版本为 3 或更高时仅接受 `rev3_x`。芯片版本不能确定 PCB 版本或电气版本。
+生成的烧录器会在烧录前探测并再次探测 ESP32-P4 芯片版本：`[1.0, 2.0)` 仅接受
+`rev1_3`，`[3.0, 4.0)` 仅接受 `rev3_x`，其他 revision 全部拒绝。芯片版本不能确定
+PCB 版本或电气版本。
 
 ## Windows CI 固件测试流程
 
@@ -129,8 +141,8 @@ Flash-CI-Firmware.cmd -Port COMx
 交互式脚本需要 Git、已登录的 GitHub CLI，以及包含 `esptool` 的 Python 环境。它只接受
 本地分支、开放且 Ready-for-review 的 PR、成功 Actions 与带配置标识制品的 SHA 全部一致
 的结果。`-ListOnly` 显示完整的 26 项契约：24 份默认配置示例制品和两份维护产品配置。
-实际运行时，v3 前芯片选择 24 份示例加 `rev1_3` 产品制品，共 25 项；v3 或之后的芯片
-只选择一份 `rev3_x` 产品制品。
+实际运行时，rev3.x 芯片选择 24 份示例加 `rev3_x` 产品制品，共 25 项；rev1.x 芯片
+只选择显式的 `rev1_3` 产品制品。
 
 工具每次只下载并校验一份制品，重新探测芯片，并严格按 manifest 计划写入，然后停止。
 它不会自动前进：只有完成当前固件所需的实机检查后，才能点击 **Mark PASS and flash

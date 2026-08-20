@@ -18,11 +18,11 @@ UI 中包含摄像、间隔拍摄、录像、AI 检测、相册、USB 磁盘和�
 
 ## ESP32-P4 芯片版本配置
 
-v3 之前的芯片使用 `rev1_3`，其中
-`CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y` 且
-`CONFIG_ESP32P4_REV_MIN_100=y`。v3 或之后的芯片使用 `rev3_x`，其中
+本应用默认对 rev3.x 芯片（`[3.0, 4.0)`）使用 `rev3_x`，其中
 `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=n` 且
-`CONFIG_ESP32P4_REV_MIN_300=y`。两种配置使用独立 sdkconfig 和构建目录，生成的二进制
+`CONFIG_ESP32P4_REV_MIN_300=y`。仅在已确认 rev1.x 芯片（`[1.0, 2.0)`，包括 rev1.3）时才显式选择 `rev1_3`，其中
+`CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y` 且 `CONFIG_ESP32P4_REV_MIN_100=y`。这些 profile
+表示芯片而不是 PCB 或产品硬件 revision，使用独立 sdkconfig 和构建目录，生成的二进制
 互不兼容。
 
 该维护产品源码在 ESP-IDF v6.0.2 上为两种配置分别生成带配置标识的任务和制品，并绑定
@@ -31,7 +31,8 @@ PR 分支的最终 HEAD，而不是临时合并提交。仅面向 ESP32-P4 主�
 `write_flash` 仍可能擦除它实际写入的扇区。打包器和烧录器会分别校验 ESP 镜像头为
 ESP32-P4 芯片 ID 18，同时
 允许原始分区表、NVS 和数据项，并检查偏移、SHA-256 哈希和文件大小。烧录器会探测并
-再次探测芯片版本：版本低于 3 时仅接受 `rev1_3`，版本为 3 或更高时仅接受 `rev3_x`。
+再次探测芯片版本：`[1.0, 2.0)` 仅接受 `rev1_3`，`[3.0, 4.0)` 仅接受 `rev3_x`，
+其他 revision 全部拒绝。
 芯片版本不能确定 PCB 版本或电气版本。
 
 托管 BSP 使用 `SDMMC_SLOT_NO_CD`，因此本应用的遗留存在状态辅助函数会始终把存储卡视为

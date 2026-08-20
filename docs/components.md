@@ -65,8 +65,8 @@ claim hardware-in-the-loop validation.
    global settings.
    Migrating to LVGL 9 requires regenerating and auditing the complete UI.
 5. Keep Example 10's `espressif/esp_audio_codec` at `>=2.3.0,<2.6.0`: v2.6+
-   requires ESP32-P4 revision 3 or newer, while the examples target the default
-   revision 1.3 profile. This dependency constraint is not a hardware-validation
+   requires ESP32-P4 revision 3 or newer, while `rev1_3` remains an explicit
+   compatibility profile. This dependency constraint is not a hardware-validation
    claim.
 6. Use the post-commit GitHub Actions matrix as compile evidence. A green build
    is not HIL evidence and does not replace physical-hardware validation.

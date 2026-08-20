@@ -112,8 +112,8 @@ jobs:
             -e CCACHE_COMPRESS=1
           command: >-
             idf.py --version &&
-            idf.py -B build-rev1_3 -D SDKCONFIG=sdkconfig.rev1_3 -D WAVESHARE_REVISION_PROFILE=rev1_3 set-target esp32p4 &&
-            idf.py -B build-rev1_3 -D SDKCONFIG=sdkconfig.rev1_3 -D WAVESHARE_REVISION_PROFILE=rev1_3 build
+            idf.py -B build-rev3_x -D SDKCONFIG=sdkconfig.rev3_x -D WAVESHARE_REVISION_PROFILE=rev3_x set-target esp32p4 &&
+            idf.py -B build-rev3_x -D SDKCONFIG=sdkconfig.rev3_x -D WAVESHARE_REVISION_PROFILE=rev3_x build
       - name: Package flashable firmware
         run: >-
           python3 scripts/ci/package_esp_idf.py
@@ -121,13 +121,13 @@ jobs:
           --idf-version "${{ matrix.idf }}"
           --target esp32p4
           --git-sha "${{ github.event.pull_request.head.sha || github.sha }}"
-          --profile rev1_3
-          --build-dir build-rev1_3
+          --profile rev3_x
+          --build-dir build-rev3_x
       - name: Upload flashable firmware
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: esp-idf-${{ matrix.idf }}-${{ matrix.example.name }}-esp32p4-rev1_3-${{ github.event.pull_request.head.sha || github.sha }}
-          path: ci-artifacts/${{ matrix.idf }}-${{ matrix.example.name }}-rev1_3
+          name: esp-idf-${{ matrix.idf }}-${{ matrix.example.name }}-esp32p4-rev3_x-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ci-artifacts/${{ matrix.idf }}-${{ matrix.example.name }}-rev3_x
           if-no-files-found: error
           retention-days: 14
 

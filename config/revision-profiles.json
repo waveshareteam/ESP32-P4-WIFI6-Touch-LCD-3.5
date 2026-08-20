@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "default_profile": "rev1_3",
+  "default_profile": "rev3_x",
   "profiles": {
     "rev1_3": {
       "CONFIG_ESP32P4_SELECTS_REV_LESS_V3": "y",
@@ -15,7 +15,7 @@
   },
   "arduino": {
     "expected_sketch_count": 0,
-    "default_chip_variant": "prev3"
+    "default_chip_variant": "postv3"
   },
   "official_bsp": {
     "local_directory": "components/esp32_p4_wifi6_touch_lcd_35",

@@ -59,6 +59,13 @@ vision interfaces, edge AI, and other interactive embedded applications.
 4. Set the target to `esp32p4`, then configure, build, flash, and monitor the
    selected project with ESP-IDF.
 
+New example configurations default to the `rev3_x` ESP32-P4 silicon profile.
+Use `rev1_3` only when a chip probe or other authoritative source confirms
+rev1.x silicon (including rev1.3). The names identify silicon revision, not PCB
+or product hardware revision; the profiles have incompatible binaries. See the
+[CI guide](docs/ci.md#esp32-p4-revision-profiles) for the explicit profile
+selection command and configuration differences.
+
 The canonical example path is now `examples/esp-idf/`. If an older bookmark or
 automation still uses `example/ESP-IDF/`, update it before selecting a project;
 the legacy [`example/`](example/) directory contains migration notes only.
@@ -85,7 +92,7 @@ components and coprocessor firmware compatible when changing its dependencies.
 
 Arduino sketches are not currently included in this repository. The Arduino
 inventory is zero; no Arduino build is represented as passing. If that surface
-is introduced, its default policy is `ChipVariant=prev3`.
+is introduced, its default policy is `ChipVariant=postv3`.
 
 ## ✅ Continuous Integration
 
@@ -95,7 +102,7 @@ complete Git diff. Project-local source changes build only the affected project;
 shared, workflow, or unknown build inputs select all projects. Documentation and
 governance changes still report the stable CI gate but skip the firmware matrix.
 The standard matrix remains 12 projects × ESP-IDF v5.5.5/v6.0.2 = 24 builds,
-all using the pre-v3 `rev1_3` profile; it is not doubled for every silicon
+all using the `rev3_x` profile for rev3.x silicon; it is not doubled for every silicon
 revision. The maintained product source, `12_esp32-p4-eye`, additionally has
 profile-qualified `rev1_3` and `rev3_x` product jobs/artifacts on IDF v6.0.2.
 Those profiles use incompatible binaries and separate sdkconfigs/build

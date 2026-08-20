@@ -29,9 +29,9 @@ $Items = @()
 $itemIndex = 1
 foreach ($projectName in $ProjectNames) {
     foreach ($version in $Versions) {
-        $prefix = "esp-idf-$version-$projectName-esp32p4-rev1_3-"
+        $prefix = "esp-idf-$version-$projectName-esp32p4-rev3_x-"
         $Items += [pscustomobject]@{
-            Index = $itemIndex; Workflow = 'esp-idf.yml'; Profile = 'rev1_3'
+            Index = $itemIndex; Workflow = 'esp-idf.yml'; Profile = 'rev3_x'
             Name = $projectName; Framework = $ExpectedFramework; Version = $version
             SourceProject = "examples/esp-idf/$projectName"; Prefix = $prefix
             Artifact = "$prefix<final-sha>"; BuildSha = '<final-sha>'; Run = $null
@@ -83,8 +83,9 @@ function Get-ArtifactBuildSha([string]$ArtifactName, [string]$ExpectedPrefix) {
 
 function Get-RevisionProfile([int]$Major, [int]$Minor) {
     if ($Major -lt 0 -or $Minor -lt 0) { throw 'Invalid silicon revision.' }
-    if ($Major -lt 3) { return 'rev1_3' }
-    return 'rev3_x'
+    if ($Major -eq 1) { return 'rev1_3' }
+    if ($Major -eq 3) { return 'rev3_x' }
+    throw "Unsupported ESP32-P4 silicon revision v$Major.$Minor; supported ranges are [1.0, 2.0) and [3.0, 4.0)."
 }
 
 function Parse-SiliconProbe([string]$ProbeText) {
@@ -381,8 +382,18 @@ function Invoke-FlashItem($Item, $State, [string]$StateFile, [string]$FlashPort,
 }
 
 function Invoke-SelfTest {
-    if ($Items.Count -ne 26 -or @($Items | Where-Object Profile -eq 'rev1_3').Count -ne 25 -or @($Items | Where-Object Profile -eq 'rev3_x').Count -ne 1) { throw 'SelfTest expected 25 rev1_3 and one rev3_x item.' }
+    if ($Items.Count -ne 26 -or @($Items | Where-Object Profile -eq 'rev1_3').Count -ne 1 -or @($Items | Where-Object Profile -eq 'rev3_x').Count -ne 25) { throw 'SelfTest expected one rev1_3 and 25 rev3_x items.' }
     if ((Parse-SiliconProbe 'Chip is ESP32-P4 (revision v1.3)').Profile -ne 'rev1_3' -or (Parse-SiliconProbe 'Chip is ESP32-P4 (revision v3.0)').Profile -ne 'rev3_x') { throw 'SelfTest silicon profile routing failed.' }
+    $unsupportedRevisions = @(
+        [pscustomobject]@{ Major = 0; Minor = 9 }
+        [pscustomobject]@{ Major = 2; Minor = 0 }
+        [pscustomobject]@{ Major = 4; Minor = 0 }
+    )
+    foreach ($unsupportedRevision in $unsupportedRevisions) {
+        $rejected = $false
+        try { [void](Get-RevisionProfile $unsupportedRevision.Major $unsupportedRevision.Minor) } catch { $rejected = $true }
+        if (-not $rejected) { throw "SelfTest did not reject unsupported revision v$($unsupportedRevision.Major).$($unsupportedRevision.Minor)." }
+    }
     $sha = '0123456789abcdef0123456789abcdef01234567'; if ((Get-ArtifactBuildSha ($Items[0].Prefix + $sha) $Items[0].Prefix) -ne $sha) { throw 'SelfTest artifact SHA binding failed.' }
     $reset = Get-StateForBuild ([pscustomobject]@{ StateVersion = 1; FinalSha = $sha; BuildSha = $sha; Profile = 'rev1_3' }) $sha $sha 'rev1_3' 'COM17' 25
     if ($reset.CurrentIndex -ne 1) { throw 'SelfTest state version reset failed.' }
@@ -426,7 +437,7 @@ function Invoke-SelfTest {
         $rejected = $false; try { [void](Test-PackageManifest $root $item $sha) } catch { $rejected = $true }; if (-not $rejected) { throw 'SelfTest did not reject --erase-all.' }
     }
     finally { if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force } }
-    Write-Output 'SELF_TEST_OK items=26 rev1_3=25 rev3_x=1 hashVerifiedSegments=2 eraseAllRejected=true capacityContract=true stateVersionReset=true portBoundRecovery=true completedTransition=true jsonRoundTrip=true'
+    Write-Output 'SELF_TEST_OK items=26 rev1_3=1 rev3_x=25 unsupportedRevisionsRejected=0.9,2.0,4.0 hashVerifiedSegments=2 eraseAllRejected=true capacityContract=true stateVersionReset=true portBoundRecovery=true completedTransition=true jsonRoundTrip=true'
 }
 
 if ($SelfTest) { Invoke-SelfTest; return }

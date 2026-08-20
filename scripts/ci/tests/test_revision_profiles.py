@@ -33,7 +33,9 @@ class RevisionProfileTests(unittest.TestCase):
 
     def test_all_projects_include_central_profile_and_exact_defaults(self) -> None:
         self.assertEqual(len(self.projects), 12)
-        self.assertEqual(self.policy["default_profile"], "rev1_3")
+        self.assertEqual(self.policy["default_profile"], "rev3_x")
+        profile_cmake = (ROOT / "config" / "revision_profiles.cmake").read_text(encoding="utf-8")
+        self.assertIn('set(WAVESHARE_REVISION_PROFILE "rev3_x" CACHE STRING', profile_cmake)
         for cmake_path in self.projects:
             with self.subTest(project=cmake_path.parent.name):
                 cmake = cmake_path.read_text(encoding="utf-8")
@@ -42,8 +44,16 @@ class RevisionProfileTests(unittest.TestCase):
                 for profile, expected in self.policy["profiles"].items():
                     self.assertEqual(parse_sdkconfig(cmake_path.parent / f"sdkconfig.defaults.{profile}"), expected)
 
-    def test_central_policy_encodes_arduino_zero_inventory_prev3(self) -> None:
-        self.assertEqual(self.policy["arduino"], {"expected_sketch_count": 0, "default_chip_variant": "prev3"})
+    def test_central_policy_encodes_arduino_zero_inventory_postv3(self) -> None:
+        self.assertEqual(self.policy["arduino"], {"expected_sketch_count": 0, "default_chip_variant": "postv3"})
+
+    def test_flasher_rejects_unsupported_silicon_revision_gaps(self) -> None:
+        flasher = (ROOT / "scripts" / "Flash-CI-Firmware.ps1").read_text(encoding="utf-8")
+        self.assertIn("if ($Major -eq 1) { return 'rev1_3' }", flasher)
+        self.assertIn("if ($Major -eq 3) { return 'rev3_x' }", flasher)
+        self.assertIn("supported ranges are [1.0, 2.0) and [3.0, 4.0)", flasher)
+        for revision in ("Major = 0; Minor = 9", "Major = 2; Minor = 0", "Major = 4; Minor = 0"):
+            self.assertIn(revision, flasher)
 
     def test_repository_policy_checker(self) -> None:
         completed = subprocess.run([sys.executable, str(SCRIPT_DIR / "check_repository_policy.py")], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

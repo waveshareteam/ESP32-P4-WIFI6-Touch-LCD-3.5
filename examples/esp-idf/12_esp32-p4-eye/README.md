@@ -22,12 +22,13 @@ is ready: startup logs report failures independently.
 
 ## ESP32-P4 silicon-revision profiles
 
-Use `rev1_3` for pre-v3 silicon, with
-`CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y` and
-`CONFIG_ESP32P4_REV_MIN_100=y`. Use `rev3_x` for v3-or-later silicon, with
+This application defaults to `rev3_x` for rev3.x silicon (`[3.0, 4.0)`), with
 `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=n` and
-`CONFIG_ESP32P4_REV_MIN_300=y`. The profiles have independent sdkconfigs and
-build directories; their binaries are incompatible.
+`CONFIG_ESP32P4_REV_MIN_300=y`. Select `rev1_3` explicitly only for confirmed
+rev1.x silicon (`[1.0, 2.0)`, including rev1.3), with `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y` and
+`CONFIG_ESP32P4_REV_MIN_100=y`. The profiles describe silicon rather than PCB
+or product hardware revision, use independent sdkconfigs and build directories,
+and produce incompatible binaries.
 
 On ESP-IDF v6.0.2, this maintained product source produces separate
 profile-qualified jobs and artifacts for both profiles, bound to the PR branch's
@@ -37,8 +38,8 @@ operations, reject ranges beyond the 32 MiB artifact-policy ceiling, and
 validate offsets, SHA-256 hashes, file sizes, and ESP32-P4 image chip ID 18; raw
 partition, NVS, and data entries remain
 valid. Normal `write_flash` may erase only the sectors it writes. The flasher
-probes and re-probes silicon revision: below 3 accepts only `rev1_3`, and 3 or
-later accepts only `rev3_x`. Silicon revision does not determine the PCB or
+probes and re-probes silicon revision: `[1.0, 2.0)` accepts only `rev1_3`, and
+`[3.0, 4.0)` accepts only `rev3_x`; every other revision is rejected. Silicon revision does not determine the PCB or
 electrical revision.
 
 The managed BSP uses `SDMMC_SLOT_NO_CD`, and this application's legacy presence

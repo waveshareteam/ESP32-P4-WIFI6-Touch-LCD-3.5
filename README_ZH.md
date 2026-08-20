@@ -55,6 +55,11 @@ ESP-IDF 示例、预编译固件镜像和产品原理图。
 3. 打开 [`examples/esp-idf/`](examples/esp-idf/) 下的工程，并查看其配置文件。
 4. 将目标芯片设置为 `esp32p4`，然后使用 ESP-IDF 配置、构建、烧录并监视所选工程。
 
+新建示例配置默认使用 `rev3_x` ESP32-P4 芯片 profile。仅当芯片探测或其他可信信息确认
+为 rev1.x 芯片（包括 rev1.3）时才使用 `rev1_3`。这些名称表示芯片 revision，不是 PCB 或
+产品硬件 revision；两种 profile 的二进制互不兼容。明确的 profile 选择命令和配置差异
+见 [CI 说明](docs/ci_ZH.md#esp32-p4-芯片版本配置)。
+
 规范示例路径现为 `examples/esp-idf/`。旧书签或自动化如果仍使用
 `example/ESP-IDF/`，请先更新后再选择工程；兼容目录 [`example/`](example/)
 只保留迁移说明。
@@ -80,7 +85,7 @@ Wi-Fi 示例通过 ESP32-C6 协处理器通信。调整相关依赖时，请保�
 | [12_esp32-p4-eye](examples/esp-idf/12_esp32-p4-eye/) | 摄像、相册和端侧视觉示例 |
 
 本仓库目前不包含 Arduino 示例。Arduino 清单为零，不会将 Arduino 构建表述为通过；若以后
-加入该表面，默认策略为 `ChipVariant=prev3`。
+加入该表面，默认策略为 `ChipVariant=postv3`。
 
 ## ✅ 持续集成
 
@@ -88,7 +93,7 @@ Wi-Fi 示例通过 ESP32-C6 协处理器通信。调整相关依赖时，请保�
 `examples/esp-idf/` 下的所有直接子工程，并对完整 Git diff 分类。单工程源码修改只构建
 受影响工程；共享文件、工作流或未知构建输入会选择全部工程。文档和治理修改仍会报告
 稳定的 CI 门禁，但跳过固件矩阵。标准矩阵仍为 12 个工程 × ESP-IDF v5.5.5/v6.0.2 =
-24 次构建，且全部使用 v3 前的 `rev1_3` 配置，不会为每个芯片版本配置翻倍。维护的产品
+24 次构建，且全部使用面向 rev3.x 芯片的 `rev3_x` 配置，不会为每个芯片版本配置翻倍。维护的产品
 源码 `12_esp32-p4-eye` 还会在 IDF v6.0.2 上生成带配置标识的 `rev1_3` 与 `rev3_x`
 产品任务/制品；两种配置使用独立 sdkconfig/构建目录，二进制互不兼容。确切配置和烧录
 保护见 [CI 说明](docs/ci_ZH.md)。

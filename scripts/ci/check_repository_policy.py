@@ -70,8 +70,8 @@ def check_arduino(policy: dict[str, object]) -> list[str]:
     errors = []
     if len(sketches) != expected:
         errors.append(f"Arduino sketch count is {len(sketches)}, expected {expected}")
-    if arduino["default_chip_variant"] != "prev3":
-        errors.append("Arduino default ChipVariant must be prev3")
+    if arduino["default_chip_variant"] != "postv3":
+        errors.append("Arduino default ChipVariant must be postv3")
     return errors
 
 
@@ -89,8 +89,11 @@ def check_profiles(policy: dict[str, object]) -> list[str]:
             values = parse_sdkconfig(project / f"sdkconfig.defaults.{profile}")
             if values != expected:
                 errors.append(f"{project.relative_to(ROOT)}/sdkconfig.defaults.{profile} does not exactly match policy")
-    if policy["default_profile"] != "rev1_3":
-        errors.append("default revision profile must be rev1_3")
+    if policy["default_profile"] != "rev3_x":
+        errors.append("default revision profile must be rev3_x")
+    profile_cmake = (ROOT / "config" / "revision_profiles.cmake").read_text(encoding="utf-8")
+    if 'set(WAVESHARE_REVISION_PROFILE "rev3_x" CACHE STRING' not in profile_cmake:
+        errors.append("central CMake revision profile default must be rev3_x")
     return errors
 
 
@@ -133,7 +136,7 @@ def check_example10_audio_codec_contract(manifest_path: Path = EXAMPLE10_MANIFES
     if audio_codec is None or not re.search(
         r'^    version:\s*">=2\.3\.0,<2\.6\.0"\s*$', audio_codec, re.MULTILINE
     ):
-        return ["Example 10 must keep espressif/esp_audio_codec at >=2.3.0,<2.6.0 for the rev1_3 default"]
+        return ["Example 10 must keep espressif/esp_audio_codec at >=2.3.0,<2.6.0 for explicit rev1_3 compatibility"]
     return []
 
 
@@ -269,9 +272,9 @@ def check_workflows() -> list[str]:
     docs = (ROOT / ".github" / "workflows" / "docs.yml").read_text(encoding="utf-8")
     repository_policy = (ROOT / ".github" / "workflows" / "repository-policy.yml").read_text(encoding="utf-8")
     exact_head = "${{ github.event.pull_request.head.sha || github.sha }}"
-    required_example = ("v5.5.5", "v6.0.2", "-B build-rev1_3 -D SDKCONFIG=sdkconfig.rev1_3", "--profile rev1_3", "--build-dir build-rev1_3", "esp32p4-rev1_3-")
+    required_example = ("v5.5.5", "v6.0.2", "-B build-rev3_x -D SDKCONFIG=sdkconfig.rev3_x", "--profile rev3_x", "--build-dir build-rev3_x", "esp32p4-rev3_x-")
     if any(token not in examples for token in required_example):
-        errors.append("ESP-IDF example workflow is missing the rev1_3 12x2 contract")
+        errors.append("ESP-IDF example workflow is missing the rev3_x 12x2 contract")
     if examples.count(f"ref: {exact_head}") < 2 or examples.count(exact_head) < 5 or "--git-sha" not in examples:
         errors.append("ESP-IDF workflow must check out and package the exact final head SHA")
     required_product = ("examples/esp-idf/12_esp32-p4-eye", "v6.0.2", "-B build-${{ matrix.profile }} -D SDKCONFIG=sdkconfig.${{ matrix.profile }}", "rev1_3", "rev3_x", "retention-days: 14")
