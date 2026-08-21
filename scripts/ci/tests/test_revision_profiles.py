@@ -125,6 +125,39 @@ class RevisionProfileTests(unittest.TestCase):
         self.assertTrue(any("APP_LCD_BUFFER_COUNT as 2" in error for error in errors))
         self.assertTrue(any("every display-buffer callsite" in error for error in errors))
 
+    def test_camera_sccb_policy_rejects_wrong_fallback_pins(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            kconfig = root / "Kconfig.projbuild"
+            defaults = root / "sdkconfig.defaults"
+            board_header = root / "lcd35_board.h"
+            camera_sketches = (root / "06.ino", root / "07.ino")
+            kconfig.write_text(
+                "config EXAMPLE_MIPI_CSI_SCCB_I2C_SCL_PIN\n    default 34\n"
+                "config EXAMPLE_MIPI_CSI_SCCB_I2C_SDA_PIN\n    default 31\n",
+                encoding="utf-8",
+            )
+            defaults.write_text(
+                "CONFIG_EXAMPLE_MIPI_CSI_SCCB_I2C_SCL_PIN=8\n"
+                "CONFIG_EXAMPLE_MIPI_CSI_SCCB_I2C_SDA_PIN=7\n",
+                encoding="utf-8",
+            )
+            board_header.write_text(
+                "inline constexpr int kI2cScl = 8;\ninline constexpr int kI2cSda = 7;\n",
+                encoding="utf-8",
+            )
+            for sketch in camera_sketches:
+                sketch.write_text(
+                    "#define CAMERA_SCCB_SCL  8\n#define CAMERA_SCCB_SDA  7\n",
+                    encoding="utf-8",
+                )
+            errors = POLICY.check_camera_sccb_pin_contract(
+                kconfig, defaults, board_header, camera_sketches
+            )
+
+        self.assertTrue(any("Example 12 camera SCL fallback" in error for error in errors))
+        self.assertTrue(any("Example 12 camera SDA fallback" in error for error in errors))
+
     def test_example12_lvgl_policy_rejects_direct_port_and_invalid_assets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

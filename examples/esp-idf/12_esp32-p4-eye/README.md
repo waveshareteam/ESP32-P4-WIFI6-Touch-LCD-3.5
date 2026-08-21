@@ -66,9 +66,10 @@ idf.py menuconfig
 idf.py -p PORT flash monitor
 ```
 
-The default MIPI-CSI Kconfig uses SCCB I2C port 0 with SCL GPIO 34 and SDA GPIO
-31 for the camera sensor. Confirm the camera module and board revision before
-changing those values.
+The default MIPI-CSI Kconfig uses SCCB I2C port 0 with the product I2C bus:
+SCL GPIO 8 and SDA GPIO 7. The normal application path passes the BSP I2C bus
+handle to the camera driver; these defaults also keep the fallback path aligned
+with the board wiring.
 
 The IDF 6 compatibility layer also validates the expected TinyUSB and ESP-DL
 source layouts at configure time. See the [component policy](../../../docs/components.md)

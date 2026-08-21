@@ -54,8 +54,9 @@ idf.py menuconfig
 idf.py -p PORT flash monitor
 ```
 
-默认 MIPI-CSI Kconfig 使用 SCCB I2C port 0，摄像头 SCL 为 GPIO 34、SDA 为 GPIO 31。
-修改这些值前请确认摄像头模块和硬件版本。
+默认 MIPI-CSI Kconfig 使用 SCCB I2C port 0 和本产品 I2C 总线：SCL 为 GPIO 8、SDA 为
+GPIO 7。正常应用路径会把 BSP I2C 总线句柄传给摄像头驱动；这些默认值也让回退路径与板级
+接线保持一致。
 
 IDF 6 兼容层还会在配置阶段检查预期的 TinyUSB 与 ESP-DL 源码布局。详情见
 [组件策略](../../../docs/components_ZH.md)和 [CI 策略](../../../docs/ci_ZH.md)。Actions 编译

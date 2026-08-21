@@ -20,6 +20,12 @@ EXAMPLE10_MAIN = EXAMPLES / "10_mp4_player" / "main" / "main.c"
 EXAMPLE10_DEFAULTS = EXAMPLES / "10_mp4_player" / "sdkconfig.defaults"
 EXAMPLE12_MANIFEST = EXAMPLES / "12_esp32-p4-eye" / "main" / "idf_component.yml"
 EXAMPLE12_IMAGES = EXAMPLES / "12_esp32-p4-eye" / "main" / "ui" / "images"
+EXAMPLE12_CAMERA_KCONFIG = EXAMPLES / "12_esp32-p4-eye" / "main" / "Kconfig.projbuild"
+ARDUINO_BOARD_HEADER = ROOT / "examples" / "arduino" / "libraries" / "Waveshare_LCD35" / "src" / "lcd35_board.h"
+ARDUINO_CAMERA_SKETCHES = (
+    ARDUINO_EXAMPLES / "06_Camera_Preview" / "06_Camera_Preview.ino",
+    ARDUINO_EXAMPLES / "07_Camera_ISP_Tuning" / "07_Camera_ISP_Tuning.ino",
+)
 REMOVED_MANAGED_BSP_DISPLAY_SYMBOLS = (
     "CONFIG_BSP_LCD_" + "COLOR_FORMAT",
     "CONFIG_BSP_LCD_" + "DPI_BUFFER_NUMS",
@@ -55,6 +61,18 @@ def parse_sdkconfig(path: Path) -> dict[str, str]:
             key, value = line.split("=", 1)
             values[key] = value.strip().strip('"')
     return values
+
+
+def parse_kconfig_defaults(path: Path) -> dict[str, str]:
+    defaults: dict[str, str] = {}
+    current_symbol: str | None = None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("config "):
+            current_symbol = stripped.split(maxsplit=1)[1]
+        elif current_symbol and stripped.startswith("default "):
+            defaults[current_symbol] = stripped.split(maxsplit=1)[1]
+    return defaults
 
 
 def check_arduino(policy: dict[str, object]) -> list[str]:
@@ -167,6 +185,33 @@ def check_display_config_contract(
     return errors
 
 
+def check_camera_sccb_pin_contract(
+    example12_kconfig: Path = EXAMPLE12_CAMERA_KCONFIG,
+    example09_defaults: Path = EXAMPLE09_DEFAULTS,
+    arduino_board_header: Path = ARDUINO_BOARD_HEADER,
+    arduino_camera_sketches: tuple[Path, ...] = ARDUINO_CAMERA_SKETCHES,
+) -> list[str]:
+    errors: list[str] = []
+    expected = {"SCL": "8", "SDA": "7"}
+    kconfig_defaults = parse_kconfig_defaults(example12_kconfig)
+    example09_values = parse_sdkconfig(example09_defaults)
+    board_header = arduino_board_header.read_text(encoding="utf-8")
+
+    for signal, gpio in expected.items():
+        kconfig_symbol = f"EXAMPLE_MIPI_CSI_SCCB_I2C_{signal}_PIN"
+        if kconfig_defaults.get(kconfig_symbol) != gpio:
+            errors.append(f"Example 12 camera {signal} fallback must default to GPIO {gpio}")
+        if example09_values.get(f"CONFIG_{kconfig_symbol}") != gpio:
+            errors.append(f"Example 09 camera {signal} must use GPIO {gpio}")
+        if not re.search(rf"kI2c{signal.title()}\s*=\s*{gpio}\s*;", board_header):
+            errors.append(f"Arduino board I2C {signal} must use GPIO {gpio}")
+        for sketch in arduino_camera_sketches:
+            text = sketch.read_text(encoding="utf-8")
+            if not re.search(rf"^#define CAMERA_SCCB_{signal}\s+{gpio}\s*$", text, re.MULTILINE):
+                errors.append(f"{sketch.relative_to(ROOT)} camera {signal} must use GPIO {gpio}")
+    return errors
+
+
 def is_first_party_esp_idf_source_or_config(path: Path) -> bool:
     return (
         path.suffix in FIRST_PARTY_ESP_IDF_SOURCE_CONFIG_SUFFIXES
@@ -265,6 +310,7 @@ def main() -> int:
         errors.extend(check_bsp(policy))
         errors.extend(check_example10_audio_codec_contract())
         errors.extend(check_display_config_contract())
+        errors.extend(check_camera_sccb_pin_contract())
         errors.extend(check_removed_managed_bsp_display_symbols())
         errors.extend(check_example12_lvgl_contract())
         errors.extend(check_workflows())

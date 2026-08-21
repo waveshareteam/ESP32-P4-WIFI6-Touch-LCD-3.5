@@ -13,12 +13,12 @@ menu "Example Configuration"
 
         config EXAMPLE_MIPI_CSI_SCCB_I2C_SCL_PIN
             int "MIPI CSI SCCB I2C SCL Pin"
-            default 34
+            default 8
             range -1 56
 
         config EXAMPLE_MIPI_CSI_SCCB_I2C_SDA_PIN
             int "MIPI CSI SCCB I2C SDA Pin"
-            default 31
+            default 7
             range -1 56
 
         config EXAMPLE_MIPI_CSI_SCCB_I2C_FREQ
