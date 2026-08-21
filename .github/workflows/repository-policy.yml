@@ -1,0 +1,40 @@
+name: Repository Policy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - run: python3 -m compileall -q scripts/ci
+      - run: python3 -m unittest discover -s scripts/ci/tests -p "test_*.py" -v
+      - run: python3 scripts/ci/check_repository_policy.py
+      - run: python3 -c "import json, pathlib; [json.loads(path.read_text(encoding='utf-8')) for path in pathlib.Path('.').rglob('*.json')]"
+      - run: python3 -c "import importlib.util,pathlib; spec=importlib.util.find_spec('yaml'); print('PyYAML parsing skipped when unavailable') if spec is None else [__import__('yaml').safe_load(p.read_text(encoding='utf-8')) for p in pathlib.Path('.github').rglob('*.y*ml')]"
+
+  flasher-contract:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Run flasher self-test
+        shell: pwsh
+        run: ./scripts/Flash-CI-Firmware.ps1 -SelfTest
+      - name: List flasher contract items
+        shell: pwsh
+        run: ./scripts/Flash-CI-Firmware.ps1 -ListOnly

@@ -1,0 +1,86 @@
+name: Product Firmware
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      example:
+        description: "Use 12_esp32-p4-eye to force the maintained product-firmware build"
+        required: false
+        default: 12_esp32-p4-eye
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: product-firmware-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      required: ${{ steps.routing.outputs.product_firmware_required }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - id: routing
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          EVENT_NAME: ${{ github.event_name }}
+          EXAMPLE_SELECTOR: ${{ inputs.example || '12_esp32-p4-eye' }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            python3 scripts/ci/classify_changes.py --selector "$EXAMPLE_SELECTOR" --github-output "$GITHUB_OUTPUT"
+          else
+            python3 scripts/ci/classify_changes.py --base "$BASE_SHA" --head "$HEAD_SHA" --github-output "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: Product firmware / ${{ matrix.profile }}
+    needs: classify
+    if: ${{ needs.classify.outputs.required == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [rev1_3, rev3_x]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Build maintained product firmware
+        uses: espressif/esp-idf-ci-action@9d38657f3d789ca759b2b37aaf5ceffbc42c4f0d # v1
+        with:
+          esp_idf_version: v6.0.2
+          target: esp32p4
+          path: examples/esp-idf/12_esp32-p4-eye
+          command: >-
+            idf.py -B build-${{ matrix.profile }} -D SDKCONFIG=sdkconfig.${{ matrix.profile }} -D WAVESHARE_REVISION_PROFILE=${{ matrix.profile }} set-target esp32p4 &&
+            idf.py -B build-${{ matrix.profile }} -D SDKCONFIG=sdkconfig.${{ matrix.profile }} -D WAVESHARE_REVISION_PROFILE=${{ matrix.profile }} build
+      - name: Package maintained product firmware
+        run: >-
+          python3 scripts/ci/package_esp_idf.py
+          --project examples/esp-idf/12_esp32-p4-eye
+          --idf-version v6.0.2
+          --target esp32p4
+          --git-sha "${{ github.event.pull_request.head.sha || github.sha }}"
+          --profile ${{ matrix.profile }}
+          --build-dir build-${{ matrix.profile }}
+      - name: Upload product firmware
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: product-firmware-v6.0.2-esp32p4-${{ matrix.profile }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ci-artifacts/v6.0.2-12_esp32-p4-eye-${{ matrix.profile }}
+          if-no-files-found: error
+          retention-days: 14

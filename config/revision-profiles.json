@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "default_profile": "rev3_x",
+  "profiles": {
+    "rev1_3": {
+      "CONFIG_ESP32P4_SELECTS_REV_LESS_V3": "y",
+      "CONFIG_ESP32P4_REV_MIN_100": "y",
+      "CONFIG_ESP32P4_REV_MIN_300": "n"
+    },
+    "rev3_x": {
+      "CONFIG_ESP32P4_SELECTS_REV_LESS_V3": "n",
+      "CONFIG_ESP32P4_REV_MIN_100": "n",
+      "CONFIG_ESP32P4_REV_MIN_300": "y"
+    }
+  },
+  "arduino": {
+    "expected_sketch_count": 10,
+    "default_chip_variant": "postv3",
+    "default_fqbn": "esp32:esp32:esp32p4:ChipVariant=postv3,PSRAM=enabled,FlashSize=16M,FlashMode=qio,FlashFreq=80,PartitionScheme=app3M_fat9M_16MB,UploadMode=default,UploadSpeed=921600"
+  },
+  "official_bsp": {
+    "local_directory": "components/esp32_p4_wifi6_touch_lcd_35",
+    "dependency": "waveshare/esp32_p4_wifi6_touch_lcd_3_5",
+    "version": "==2.0.2"
+  }
+}

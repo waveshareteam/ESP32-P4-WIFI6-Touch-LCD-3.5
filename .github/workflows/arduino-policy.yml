@@ -1,0 +1,149 @@
+name: Arduino Examples
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "all, an example name, or a repository-relative example path"
+        required: false
+        default: all
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arduino-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  ARDUINO_CORE_VERSION: "3.3.11"
+  ARDUINO_FQBN: "esp32:esp32:esp32p4:ChipVariant=postv3,PSRAM=enabled,FlashSize=16M,FlashMode=qio,FlashFreq=80,PartitionScheme=app3M_fat9M_16MB,UploadMode=default,UploadSpeed=921600"
+
+jobs:
+  discover:
+    name: Discover Arduino examples
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.examples.outputs.matrix }}
+      count: ${{ steps.examples.outputs.count }}
+      build-required: ${{ steps.routing.outputs.arduino_build_required }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify Arduino inventory policy
+        run: python3 scripts/ci/check_repository_policy.py --arduino-only
+      - id: routing
+        name: Route changed files
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "arduino_build_required=true" >> "$GITHUB_OUTPUT"
+          else
+            python3 scripts/ci/classify_changes.py \
+              --base "$BASE_SHA" \
+              --head "$HEAD_SHA" \
+              --github-output "$GITHUB_OUTPUT"
+          fi
+      - id: examples
+        name: Discover first-party sketches
+        env:
+          BUILD_REQUIRED: ${{ steps.routing.outputs.arduino_build_required }}
+          SELECTOR: ${{ github.event_name == 'workflow_dispatch' && inputs.target || 'all' }}
+        run: |
+          set -euo pipefail
+          if [[ "$BUILD_REQUIRED" == "true" ]]; then
+            python3 scripts/discover_arduino_examples.py \
+              --selector "$SELECTOR" \
+              --core "$ARDUINO_CORE_VERSION" \
+              --fqbn "$ARDUINO_FQBN" \
+              --github-output "$GITHUB_OUTPUT"
+          else
+            echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
+            echo 'count=0' >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: ${{ matrix.name }} / Arduino ${{ matrix.core }}
+    needs: discover
+    if: needs.discover.outputs.count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Install Arduino CLI
+        uses: arduino/setup-arduino-cli@81d310742121c928ea9c8bbd407b4217b432ae02 # v2.0.0
+        with:
+          version: "1.5.1"
+      - name: Install ESP32 Arduino core
+        run: |
+          set -euo pipefail
+          arduino-cli config init --overwrite
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@${{ matrix.core }}
+      - name: Verify bundled Arduino libraries
+        run: |
+          set -euo pipefail
+          grep -qx 'version=1.6.0' examples/arduino/libraries/GFX_Library_for_Arduino/library.properties
+          grep -qx 'version=9.3.0' examples/arduino/libraries/lvgl/library.properties
+          test -f examples/arduino/libraries/lv_conf.h
+          test -f examples/arduino/libraries/lvgl/src/demos/lv_demos.h
+          test -f examples/arduino/libraries/displays/gt911.cpp
+      - name: Compile ${{ matrix.path }}
+        run: |
+          set -euo pipefail
+          project="${{ matrix.path }}"
+          project_name="$(basename "$project")"
+          test -f "$project/$project_name.ino"
+          test "$(find "$project" -maxdepth 1 -type f -name '*.ino' | wc -l)" -eq 1
+          arduino-cli compile \
+            --fqbn "${{ matrix.fqbn }}" \
+            --libraries examples/arduino/libraries \
+            --build-path "build/arduino-${{ matrix.name }}-${{ matrix.core }}" \
+            "$project"
+
+  result:
+    name: Arduino build matrix
+    if: always()
+    needs: [discover, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify Arduino matrix result
+        env:
+          DISCOVER_RESULT: ${{ needs.discover.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          SELECTED_COUNT: ${{ needs.discover.outputs.count }}
+        run: |
+          set -euo pipefail
+          if [[ "$DISCOVER_RESULT" != "success" ]]; then
+            exit 1
+          fi
+          if [[ "$SELECTED_COUNT" == "0" ]]; then
+            if [[ "$BUILD_RESULT" != "skipped" ]]; then
+              exit 1
+            fi
+            exit 0
+          fi
+          if [[ "$BUILD_RESULT" != "success" ]]; then
+            exit 1
+          fi

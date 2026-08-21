@@ -1,0 +1,44 @@
+dependencies:
+  waveshare/esp32_p4_wifi6_touch_lcd_3_5:
+    version: "==2.0.2"
+    public: true
+
+  # SquareLine-generated UI image assets use the LVGL 8 descriptor contract.
+  lvgl/lvgl:
+    version: "8.3.*"
+    public: true
+
+  espressif/button:
+    # v4.2.0 retains the event, GPIO-device, and multiple-click APIs used here.
+    version: "==4.2.0"
+  # esp_tinyusb 1.7.6~2 supports IDF 6 after removal of the usb component.
+  espressif/esp_tinyusb:
+    matches:
+      - if: "idf_version >=6.0"
+        version: "==1.7.6~2"
+      - if: "idf_version <6.0"
+        version: "1.4.*"
+
+  espressif/esp_audio_codec:
+    version: "2.3.*"
+    public: true
+
+  espressif/esp_muxer:
+    version: "1.1.*"
+    public: true
+
+  # esp_video 2.0.1 adds IDF 6 driver support and requires esp_h264 1.0.4.
+  espressif/esp_h264:
+    matches:
+      - if: "idf_version >=6.0"
+        version: "==1.0.4"
+      - if: "idf_version <6.0"
+        version: "==1.0.3"
+    public: true
+
+  espressif/esp_video:
+    matches:
+      - if: "idf_version >=6.0"
+        version: "==2.0.1"
+      - if: "idf_version <6.0"
+        version: "==0.9.0"

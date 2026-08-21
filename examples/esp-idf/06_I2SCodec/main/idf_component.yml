@@ -1,0 +1,4 @@
+## IDF Component Manager Manifest File
+
+dependencies:
+  espressif/esp_codec_dev: "^1.5.4"

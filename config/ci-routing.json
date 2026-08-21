@@ -1,0 +1,34 @@
+{
+  "build_override_patterns": [],
+  "documentation_patterns": [
+    "config/markdown-audit.json",
+    "config/ci-routing.json",
+    "scripts/check_readme.py"
+  ],
+  "documentation_asset_patterns": [
+    "assets/ESP32-P4-WIFI6-Touch-LCD-3.5-details-1.jpg"
+  ],
+  "ignore_build_patterns": [
+    ".gitattributes",
+    ".gitignore"
+  ],
+  "firmware_patterns": [],
+  "esp_idf_shared_patterns": [],
+  "arduino_shared_patterns": [
+    "examples/arduino/common/**",
+    "examples/arduino/libraries/**"
+  ],
+  "esp_idf_global_patterns": [
+    "config/revision-profiles.json",
+    "example/ESP-IDF/**"
+  ],
+  "arduino_global_patterns": [
+    "config/revision-profiles.json",
+    "scripts/discover_arduino_examples.py"
+  ],
+  "global_build_patterns": [
+    "Flash-CI-Firmware.cmd",
+    "scripts/Flash-CI-Firmware.ps1",
+    "scripts/ci/*"
+  ]
+}

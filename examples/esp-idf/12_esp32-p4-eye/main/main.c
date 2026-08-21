@@ -1,0 +1,69 @@
+#include <stdio.h>
+#include "esp_log.h"
+#include "esp_memory_utils.h"
+#include "nvs_flash.h"
+#include "nvs.h"
+#include "bsp/esp-bsp.h"
+#include "bsp_board_extra.h"
+#include "ui_extra.h"
+#include "app_control.h"
+#include "app_video_stream.h"
+#include "app_storage.h"
+#include "app_ai_detect.h"
+
+static const char *TAG = "main";
+
+void app_main(void)
+{
+    // Initialize NVS
+    ESP_LOGI(TAG, "Initialize NVS");
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+    // Initialize the flashlight
+    ESP_LOGI(TAG, "Initialize the flashlight");
+    ESP_ERROR_CHECK(bsp_extra_flashlight_init());
+
+    // Initialize the I2C first
+    ESP_LOGI(TAG, "Initialize the I2C");
+    ESP_ERROR_CHECK(bsp_i2c_init());
+    i2c_master_bus_handle_t i2c_handle = bsp_i2c_get_handle();
+    ESP_ERROR_CHECK(i2c_handle ? ESP_OK : ESP_ERR_INVALID_STATE);
+
+    // Initialize the AI detect
+    ESP_LOGI(TAG, "Initialize the AI detect");
+    ESP_ERROR_CHECK(app_ai_detect_init());
+
+    // Initialize the display
+    ESP_LOGI(TAG, "Initialize the display");
+    bsp_display_start();
+
+    bsp_display_lock(0);
+    ui_extra_init();
+    bsp_display_unlock();
+
+    // Initialize the storage
+    ESP_LOGI(TAG, "Initialize the storage");  
+    ESP_ERROR_CHECK(app_storage_init());
+
+    // Turn on the display backlight
+    bsp_display_backlight_on();
+
+    ESP_LOGI(TAG, "Initialize the application control module");
+    ret = app_control_init();
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "App control init failed: %s", esp_err_to_name(ret));
+    }
+    // Initialize the video streaming application
+    ESP_LOGI(TAG, "Initialize the video streaming application");
+    ret = app_video_stream_init(i2c_handle);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Video stream init failed: %s", esp_err_to_name(ret));
+    }
+    
+    ESP_LOGI(TAG, "Application initialization completed");
+}

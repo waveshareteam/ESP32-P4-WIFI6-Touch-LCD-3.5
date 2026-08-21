@@ -1,0 +1,20 @@
+dependencies:
+  idf:
+    version: '>=5.3.0'
+
+  waveshare/esp32_p4_wifi6_touch_lcd_3_5:
+    version: "==2.0.2"
+    public: true
+
+  chmorgan/esp-audio-player:
+    version: "^1.1.0"
+    public: true
+
+  chmorgan/esp-file-iterator:
+    version: "1.0.0"
+    public: true
+
+description: Example-specific board extensions for ESP32-P4-WIFI6-Touch-LCD-3.5
+targets:
+- esp32p4
+version: 0.0.2

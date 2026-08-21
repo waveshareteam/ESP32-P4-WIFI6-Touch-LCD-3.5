@@ -1,6 +1,7 @@
 **/.git/
 **/.gitmodules
 **/.gitattributes
+!/.gitattributes
 **/.gitkeep
 **/.vscode
 **/.gitindex
@@ -8,7 +9,16 @@
 **/.git-*
 **/.idea
 **/build
+**/build-rev1_3/
+**/build-rev3_x/
 **/managed_components
 **/dependencies.lock
 **/sdkconfig
 **/sdkconfig.old
+**/sdkconfig.rev1_3
+**/sdkconfig.rev3_x
+/.ci-cache/
+/ci-artifacts/
+**/__pycache__/
+**/*.py[cod]
+/ci-routing-report*.json
