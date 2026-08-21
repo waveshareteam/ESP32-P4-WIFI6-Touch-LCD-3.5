@@ -10,11 +10,12 @@ test the intended sketch on the intended board.
 ## Install and configure
 
 1. Install Arduino-ESP32 **3.3.11** in Arduino IDE or Arduino CLI.
-2. Install **GFX Library for Arduino 1.6.7**. Install **LVGL 9.3.0** as well
-   before building `04_LVGLV9_Arduino`.
-3. Install the bundled `Waveshare_LCD35` library from this directory's
-   [`libraries/`](libraries/) folder into the Arduino sketchbook libraries
-   folder, or supply that folder as the additional Arduino library search path.
+2. Keep the complete bundled [`libraries/`](libraries/) tree together. It is
+   the LCD-5 reference library baseline and includes **GFX Library for Arduino
+   1.6.0**, **LVGL 9.3.0**, the full `lv_conf.h`, and display/touch sources.
+3. Add this entire `libraries/` directory to the Arduino library search path,
+   or install all of its contents together in the sketchbook libraries folder.
+   The LCD-3.5 sketches select the bundled `Waveshare_LCD35` board layer.
 4. Select the ESP32-P4 board and choose `ChipVariant=postv3` for the default
    rev3.x silicon configuration. Select `ChipVariant=prev3` only for a chip
    confirmed as rev1.x, including rev1.3.
@@ -46,6 +47,12 @@ DSI PHY clock choice to either of those paths. If adapting a sketch for an
 external DSI panel, use the DSI panel's validated timing and select `PLL_F20M`
 for rev1.x or `XTAL` for rev3.x as described in the
 [silicon revision guide](../../docs/revisions.md).
+
+The complete LCD-5 baseline keeps the reference `displays/` library, including
+its HX8394 MIPI DSI configuration. LCD-3.5 sketches do not use that panel
+configuration: their active board layer is `Waveshare_LCD35`, which drives the
+board's ST7796 SPI panel. The reference sources are retained intact for parity,
+not treated as LCD-3.5 hardware defaults.
 
 The touch helper first probes GT911 at I2C `0x5D`, then `0x14`, and initializes
 the driver using the address that acknowledges. It leaves `INT` and `RST`

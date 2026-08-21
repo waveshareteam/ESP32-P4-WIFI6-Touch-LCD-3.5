@@ -8,10 +8,12 @@
 ## 安装与配置
 
 1. 在 Arduino IDE 或 Arduino CLI 中安装 Arduino-ESP32 **3.3.11**。
-2. 安装 **GFX Library for Arduino 1.6.7**。构建 `04_LVGLV9_Arduino` 前还需安装
-   **LVGL 9.3.0**。
-3. 将本目录 [`libraries/`](libraries/) 中随仓库提供的 `Waveshare_LCD35` 库安装到 Arduino
-   sketchbook 的 libraries 目录，或将该目录作为 Arduino 的额外库搜索路径。
+2. 将随仓库提供的完整 [`libraries/`](libraries/) 目录作为一个整体保留。它是 LCD-5 的
+   参考库基线，包含 **GFX Library for Arduino 1.6.0**、**LVGL 9.3.0**、完整
+   `lv_conf.h` 以及显示和触摸源码。
+3. 将整个 `libraries/` 目录加入 Arduino 库搜索路径，或把其中全部内容一起安装到
+   sketchbook 的 libraries 目录。LCD-3.5 sketch 选择随仓库提供的 `Waveshare_LCD35`
+   板级层。
 4. 选择 ESP32-P4 开发板；默认 rev3.x 芯片配置选择 `ChipVariant=postv3`。只有确认芯片为
    rev1.x（含 rev1.3）时才选择 `ChipVariant=prev3`。
 
@@ -39,6 +41,10 @@
 通过 MIPI-CSI 连接。不能将 MIPI DSI PHY 时钟选择应用到这两条路径。如果为外接 DSI 面板
 改造 sketch，应使用该面板已经验证的时序，并按[芯片版本说明](../../docs/revisions_ZH.md)为
 rev1.x 选择 `PLL_F20M`、为 rev3.x 选择 `XTAL`。
+
+完整 LCD-5 基线保留参考 `displays/` 库及其中的 HX8394 MIPI DSI 配置。LCD-3.5 sketch
+不会使用该面板配置；其有效板级层是 `Waveshare_LCD35`，用于驱动板载 ST7796 SPI 屏。
+这些参考源码是为保持完整基线而保留，不是 LCD-3.5 的硬件默认配置。
 
 触摸辅助库依次探测 GT911 的 I2C `0x5D`、`0x14`，以响应的地址初始化驱动。它不指定
 `INT` 和 `RST`，并使用轮询读取触摸数据。已发布的 LCD-3.5 板使用 FT6336/FT5x06 兼容

@@ -89,9 +89,10 @@ Wi-Fi 示例通过 ESP32-C6 协处理器通信。调整相关依赖时，请保�
 [`examples/arduino/`](examples/arduino/) 提供 10 个第一方 sketch：Hello World、ASCII 表、
 绘图板、LVGL 9、Wi-Fi 分析器、摄像头预览、摄像头 ISP 调参、SD 卡、音频播放和麦克风录音。
 默认 rev3.x 芯片配置应安装 Arduino-ESP32 3.3.11 并选择 `ChipVariant=postv3`；仅当芯片
-确认属于 rev1.x（含 rev1.3）时选择 `ChipVariant=prev3`。随仓库提供的板级库依赖
-GFX Library for Arduino 1.6.7；LVGL 示例还使用 LVGL 9.3.0。板卡选项、库安装、触摸探测和
-每个 sketch 的范围见 [Arduino 说明](examples/arduino/README_ZH.md)。
+确认属于 rev1.x（含 rev1.3）时选择 `ChipVariant=prev3`。仓库保留 LCD-5 的完整 Arduino
+库基线，包括 GFX Library for Arduino 1.6.0、LVGL 9.3.0、完整 LVGL 配置以及显示和触摸
+辅助库；LCD-3.5 sketch 使用随仓库提供的 `Waveshare_LCD35` 板级层驱动 ST7796。板卡选项、
+随仓库库、触摸探测和每个 sketch 的范围见 [Arduino 说明](examples/arduino/README_ZH.md)。
 
 | Sketch | 功能 |
 | --- | --- |

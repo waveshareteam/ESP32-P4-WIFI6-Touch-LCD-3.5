@@ -93,15 +93,21 @@ jobs:
         uses: arduino/setup-arduino-cli@81d310742121c928ea9c8bbd407b4217b432ae02 # v2.0.0
         with:
           version: "1.5.1"
-      - name: Install ESP32 Arduino core and published libraries
+      - name: Install ESP32 Arduino core
         run: |
           set -euo pipefail
           arduino-cli config init --overwrite
           arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
           arduino-cli core update-index
           arduino-cli core install esp32:esp32@${{ matrix.core }}
-          arduino-cli lib install "GFX Library for Arduino@1.6.7"
-          arduino-cli lib install "lvgl@9.3.0"
+      - name: Verify bundled Arduino libraries
+        run: |
+          set -euo pipefail
+          grep -qx 'version=1.6.0' examples/arduino/libraries/GFX_Library_for_Arduino/library.properties
+          grep -qx 'version=9.3.0' examples/arduino/libraries/lvgl/library.properties
+          test -f examples/arduino/libraries/lv_conf.h
+          test -f examples/arduino/libraries/lvgl/src/demos/lv_demos.h
+          test -f examples/arduino/libraries/displays/gt911.cpp
       - name: Compile ${{ matrix.path }}
         run: |
           set -euo pipefail

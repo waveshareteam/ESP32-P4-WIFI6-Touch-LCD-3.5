@@ -7,7 +7,15 @@
       ]
     }
   ],
-  "exclude_patterns": [],
+  "exclude_patterns": [
+    "examples/arduino/libraries/GFX_Library_for_Arduino/README.md",
+    "examples/arduino/libraries/GFX_Library_for_Arduino/src/canvas/readme.md",
+    "examples/arduino/libraries/lvgl/COPYRIGHTS.md",
+    "examples/arduino/libraries/lvgl/README.md",
+    "examples/arduino/libraries/lvgl/src/demos/README.md",
+    "examples/arduino/libraries/lvgl/src/drivers/README.md",
+    "examples/arduino/libraries/lvgl/src/others/fragment/README.md"
+  ],
   "pair_exempt_patterns": [
     ".github/pull_request_template.md"
   ],

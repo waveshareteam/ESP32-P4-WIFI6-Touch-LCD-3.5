@@ -58,6 +58,29 @@ class RevisionProfileTests(unittest.TestCase):
             },
         )
 
+    def test_lcd5_arduino_library_baseline_is_bundled(self) -> None:
+        libraries = ROOT / "examples" / "arduino" / "libraries"
+        expected_files = (
+            "GFX_Library_for_Arduino/src/Arduino_GFX_Library.h",
+            "GFX_Library_for_Arduino/src/databus/Arduino_ESP32DSIPanel.cpp",
+            "lvgl/src/demos/lv_demos.h",
+            "lvgl/src/demos/widgets/lv_demo_widgets.c",
+            "displays/gt911.cpp",
+            "displays/touch.cpp",
+            "lv_conf.h",
+        )
+        for relative_path in expected_files:
+            with self.subTest(path=relative_path):
+                self.assertTrue((libraries / relative_path).is_file())
+        self.assertIn(
+            "version=1.6.0",
+            (libraries / "GFX_Library_for_Arduino" / "library.properties").read_text(encoding="utf-8").splitlines(),
+        )
+        self.assertIn(
+            "version=9.3.0",
+            (libraries / "lvgl" / "library.properties").read_text(encoding="utf-8").splitlines(),
+        )
+
     def test_flasher_rejects_unsupported_silicon_revision_gaps(self) -> None:
         flasher = (ROOT / "scripts" / "Flash-CI-Firmware.ps1").read_text(encoding="utf-8")
         self.assertIn("if ($Major -eq 1) { return 'rev1_3' }", flasher)

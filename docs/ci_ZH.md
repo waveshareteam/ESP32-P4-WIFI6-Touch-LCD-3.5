@@ -62,8 +62,13 @@ Arduino sketch 或随仓库提供的板级库源码会进入独立 Arduino 矩�
 配置；不会为每个硅版本配置重复一套矩阵。路由选中时，Arduino CI 会独立发现
 [`examples/arduino/`](../examples/arduino/) 中的 10 个 sketch，使用 Arduino-ESP32 3.3.11
 编译，默认选择 `ChipVariant=postv3`。`ChipVariant=prev3` 只适用于已确认的 rev1.x 芯片，
-包括 rev1.3。Arduino 板级库依赖 GFX Library for Arduino 1.6.7；LVGL sketch 依赖 LVGL
-9.3.0。详见 [Arduino 说明](../examples/arduino/README_ZH.md)。
+包括 rev1.3。CI 使用仓库中完整保留的 LCD-5 Arduino 库基线编译：GFX Library for Arduino
+1.6.0、LVGL 9.3.0、完整 LVGL 配置及显示和触摸辅助库；不会用 Library Manager 下载替换
+这些源码。详见 [Arduino 说明](../examples/arduino/README_ZH.md)。
+
+复制的 GFX 和 LVGL 上游树中的 Markdown 也按该基线逐字保留。仓库 Markdown 审计仅排除
+这 7 个明确的 vendor 文档文件，因为其发布包会引用 Arduino 包未包含的上游翻译页或截图
+资源；第一方 Arduino 和产品文档仍执行正常的双语与本地链接门禁。
 
 矩阵设置 `fail-fast: false`，最大并行数为 6。组件管理器下载与 ccache 会按运行器系统、
 ESP-IDF 版本、目标、工程及依赖 manifest 哈希隔离。

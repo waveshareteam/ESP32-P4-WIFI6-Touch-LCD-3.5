@@ -76,9 +76,18 @@ all of those builds use the `rev3_x` profile. It is not doubled for every
 silicon-revision profile. When its route is selected, Arduino CI separately discovers the ten sketches in
 [`examples/arduino/`](../examples/arduino/), compiles them with
 Arduino-ESP32 3.3.11, and defaults to `ChipVariant=postv3`. `ChipVariant=prev3`
-is solely for confirmed rev1.x silicon, including rev1.3. The Arduino board
-library requires GFX Library for Arduino 1.6.7; the LVGL sketch requires LVGL
-9.3.0. See the [Arduino guide](../examples/arduino/README.md).
+is solely for confirmed rev1.x silicon, including rev1.3. CI compiles against
+the complete checked-in LCD-5 library baseline: GFX Library for Arduino 1.6.0,
+LVGL 9.3.0, the full LVGL configuration, and the display/touch helpers. It does
+not replace those sources with Library Manager downloads. See the
+[Arduino guide](../examples/arduino/README.md).
+
+Markdown shipped inside the copied GFX and LVGL upstream trees remains
+byte-for-byte part of that baseline. The repository Markdown audit excludes
+those seven exact vendor documentation files because their release archives
+refer to upstream translation or screenshot assets that are not included in
+the Arduino package; first-party Arduino and product documentation remains in
+the normal bilingual and local-link gate.
 
 The matrix uses `fail-fast: false` and a bounded parallelism of six. Component
 Manager downloads and ccache data are isolated by runner OS, ESP-IDF version,

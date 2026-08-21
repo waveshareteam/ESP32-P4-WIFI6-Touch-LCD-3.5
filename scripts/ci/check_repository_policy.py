@@ -94,6 +94,29 @@ def check_arduino(policy: dict[str, object]) -> list[str]:
     )
     if arduino.get("default_fqbn") != expected_fqbn:
         errors.append("Arduino default FQBN must select postv3, 16M QIO80 flash, PSRAM, and app3M_fat9M_16MB")
+    bundled_root = ROOT / "examples" / "arduino" / "libraries"
+    required_bundled_files = (
+        "GFX_Library_for_Arduino/library.properties",
+        "GFX_Library_for_Arduino/src/Arduino_GFX_Library.h",
+        "GFX_Library_for_Arduino/src/databus/Arduino_ESP32DSIPanel.cpp",
+        "lvgl/library.properties",
+        "lvgl/src/demos/lv_demos.h",
+        "lvgl/src/demos/widgets/lv_demo_widgets.c",
+        "displays/gt911.cpp",
+        "displays/touch.cpp",
+        "lv_conf.h",
+    )
+    for relative_path in required_bundled_files:
+        if not (bundled_root / relative_path).is_file():
+            errors.append(f"missing bundled Arduino library file: {relative_path}")
+    expected_library_versions = {
+        "GFX_Library_for_Arduino/library.properties": "version=1.6.0",
+        "lvgl/library.properties": "version=9.3.0",
+    }
+    for relative_path, version_line in expected_library_versions.items():
+        properties = bundled_root / relative_path
+        if properties.is_file() and version_line not in properties.read_text(encoding="utf-8").splitlines():
+            errors.append(f"{relative_path} must contain {version_line}")
     return errors
 
 
@@ -285,13 +308,18 @@ def check_workflows() -> list[str]:
         "ChipVariant=postv3,PSRAM=enabled,FlashSize=16M,FlashMode=qio,FlashFreq=80,PartitionScheme=app3M_fat9M_16MB,UploadMode=default,UploadSpeed=921600",
         "scripts/discover_arduino_examples.py",
         "arduino-cli compile",
-        "GFX Library for Arduino@1.6.7",
-        "lvgl@9.3.0",
+        "version=1.6.0",
+        "version=9.3.0",
+        "GFX_Library_for_Arduino/library.properties",
+        "lvgl/src/demos/lv_demos.h",
+        "libraries/displays/gt911.cpp",
         "Arduino build matrix",
         "arduino_build_required",
     )
     if any(token not in arduino for token in required_arduino):
-        errors.append("Arduino workflow is missing the published-library 10-sketch compile contract")
+        errors.append("Arduino workflow is missing the bundled-library 10-sketch compile contract")
+    if "arduino-cli lib install" in arduino:
+        errors.append("Arduino workflow must use the bundled GFX and LVGL trees instead of installing substitutes")
     if "Package firmware" in arduino or "upload-artifact" in arduino.casefold():
         errors.append("Arduino workflow must compile examples only and must not package firmware")
     if f"ref: {exact_head}" not in docs or f"ref: {exact_head}" not in arduino or repository_policy.count(f"ref: {exact_head}") < 2:

@@ -1,0 +1,7 @@
+# Preserve the complete LCD-5 Arduino vendor baselines byte-for-byte.
+# Their upstream release files intentionally retain mixed line endings and
+# whitespace that first-party repository checks must not rewrite.
+examples/arduino/libraries/GFX_Library_for_Arduino/** -text -whitespace linguist-vendored
+examples/arduino/libraries/lvgl/** -text -whitespace linguist-vendored
+examples/arduino/libraries/displays/** -text -whitespace linguist-vendored
+examples/arduino/libraries/lv_conf.h -text -whitespace linguist-vendored

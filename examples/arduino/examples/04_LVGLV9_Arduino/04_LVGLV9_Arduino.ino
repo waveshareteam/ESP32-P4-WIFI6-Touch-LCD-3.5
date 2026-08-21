@@ -6,6 +6,7 @@
 #include <esp_heap_caps.h>
 #include <esp_timer.h>
 #include <lvgl.h>
+#include <demos/lv_demos.h>
 #include "serial_log.h"
 #include "lcd35_board.h"
 #include "lcd35_touch.h"
@@ -61,7 +62,7 @@ void lvglTick(void *param) {
 
 void setup(void) {
   serial_log::begin(115200);
-  serial_log::println("LCD-3.5 LVGL v9 widgets");
+  serial_log::println("LCD-3.5 LVGL v9 widgets demo");
 
   if (!lcd35::display_begin()) {
     haltWithError("ST7796 display initialization failed");
@@ -115,21 +116,7 @@ void setup(void) {
   lv_display_set_dpi(lv_display, 150);
   lv_obj_set_style_bg_color(lv_screen_active(), lv_color_black(), 0);
 
-  lv_obj_t *title = lv_label_create(lv_screen_active());
-  lv_label_set_text(title, "ESP32-P4 LCD-3.5");
-  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 24);
-
-  lv_obj_t *slider = lv_slider_create(lv_screen_active());
-  lv_obj_set_width(slider, 240);
-  lv_obj_align(slider, LV_ALIGN_CENTER, 0, -24);
-  lv_slider_set_value(slider, 60, LV_ANIM_OFF);
-
-  lv_obj_t *button = lv_button_create(lv_screen_active());
-  lv_obj_set_size(button, 150, 56);
-  lv_obj_align(button, LV_ALIGN_CENTER, 0, 64);
-  lv_obj_t *button_label = lv_label_create(button);
-  lv_label_set_text(button_label, "Touch me");
-  lv_obj_center(button_label);
+  lv_demo_widgets();
 
   serial_log::println("Setup complete");
 }

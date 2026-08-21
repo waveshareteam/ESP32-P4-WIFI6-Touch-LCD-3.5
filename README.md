@@ -98,10 +98,12 @@ Hello World, ASCII table, drawing board, LVGL 9, Wi-Fi analyzer, camera preview,
 camera ISP tuning, SD card, audio playback, and microphone recording. Install
 Arduino-ESP32 3.3.11 with `ChipVariant=postv3` for the default rev3.x silicon
 configuration. Use `ChipVariant=prev3` only for confirmed rev1.x silicon,
-including rev1.3. The bundled board library requires GFX Library for Arduino
-1.6.7; the LVGL sketch additionally uses LVGL 9.3.0. See the
-[Arduino guide](examples/arduino/README.md) for the board options, library
-installation, touch probing, and each sketch's scope.
+including rev1.3. The repository keeps the complete LCD-5 Arduino library
+baseline, including GFX Library for Arduino 1.6.0, LVGL 9.3.0, the full LVGL
+configuration, and the display/touch helpers. LCD-3.5 sketches use the bundled
+`Waveshare_LCD35` board layer for the ST7796 hardware. See the
+[Arduino guide](examples/arduino/README.md) for the board options, bundled
+libraries, touch probing, and each sketch's scope.
 
 | Sketch | Focus |
 | --- | --- |
