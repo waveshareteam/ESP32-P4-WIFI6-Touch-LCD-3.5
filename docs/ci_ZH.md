@@ -12,13 +12,15 @@
   的第一方工程，构建对应矩阵、打包可刷写制品，并输出一个聚合结果。
 - [`product-firmware.yml`](../.github/workflows/product-firmware.yml) 在保守路由判断产品
   固件受影响时，为维护的产品源码分别构建两个芯片版本配置。
-- [`arduino-policy.yml`](../.github/workflows/arduino-policy.yml) 检查当前零 sketch 清单和
-  未来 `ChipVariant=postv3` 默认值，不声称执行过 Arduino 编译。
+- [`arduino-policy.yml`](../.github/workflows/arduino-policy.yml) 发现 Arduino sketch；当
+  Arduino 或共享构建输入发生变化时，使用 Arduino-ESP32 3.3.11 和默认
+  `ChipVariant=postv3` 配置编译 10 个第一方 sketch。
 - [`repository-policy.yml`](../.github/workflows/repository-policy.yml) 执行确定性的配置、
   打包、路由和 Windows 烧录器契约测试。
 
 这些工作流都会在每个 Pull Request 和推送到 `main` 时运行。路径过滤由仓库中受版本控制
 的分类器完成，而不只依赖 GitHub 工作流触发器，因此仅文档改动也会产生稳定的必需检查。
+未影响 Arduino 的改动仍会产生稳定的 Arduino 聚合检查，但其编译矩阵会跳过。
 
 ## 改动路由
 
@@ -34,8 +36,11 @@ merge-base diff。遇到空范围、格式错误或不安全路径时会直接�
 | 内嵌 Brookesia `test_apps` | 不作为产品示例构建 |
 | 已提交的固件/发布交付物 | 不做源码构建，标记交付评审 |
 
-重命名会同时分类旧路径和新路径。旧写法 `example/ESP-IDF` 仅用于安全处理迁移和陈旧 diff；
-规范工程根目录是 `examples/esp-idf`。
+Arduino sketch 或随仓库提供的板级库源码会进入独立 Arduino 矩阵，本身不会选择 ESP-IDF
+示例。共享 CI、工作流或 profile 输入会保守地选择两套适用矩阵。
+
+重命名会同时分类旧路径和新路径，从而安全处理迁移和陈旧 diff。规范 ESP-IDF 工程根目录是
+`examples/esp-idf`。
 
 手动运行可传入 `all`、示例目录名（如 `04_wifistation`），或示例内部的仓库相对路径。
 绝对路径、不存在路径和逃逸仓库的路径都会被拒绝。
@@ -54,8 +59,11 @@ merge-base diff。遇到空范围、格式错误或不安全路径时会直接�
 - `v6.0.2`
 
 标准示例矩阵为 12 个工程 × 2 个 ESP-IDF 版本 = 24 次构建，且全部使用 `rev3_x`
-配置；不会为每个硅版本配置重复一套矩阵。当前 Arduino 清单为零，因此仓库不会声称或
-运行 Arduino 构建。若以后加入 Arduino 表面，默认策略为 `ChipVariant=postv3`。
+配置；不会为每个硅版本配置重复一套矩阵。路由选中时，Arduino CI 会独立发现
+[`examples/arduino/`](../examples/arduino/) 中的 10 个 sketch，使用 Arduino-ESP32 3.3.11
+编译，默认选择 `ChipVariant=postv3`。`ChipVariant=prev3` 只适用于已确认的 rev1.x 芯片，
+包括 rev1.3。Arduino 板级库依赖 GFX Library for Arduino 1.6.7；LVGL sketch 依赖 LVGL
+9.3.0。详见 [Arduino 说明](../examples/arduino/README_ZH.md)。
 
 矩阵设置 `fail-fast: false`，最大并行数为 6。组件管理器下载与 ccache 会按运行器系统、
 ESP-IDF 版本、目标、工程及依赖 manifest 哈希隔离。
@@ -86,7 +94,8 @@ revision，生成的二进制互不兼容，不能互相替用。两条受支持
 `[3.0, 4.0)` 之外的 revision。维护的
 产品源码为 [`12_esp32-p4-eye`](../examples/esp-idf/12_esp32-p4-eye/)，它在 ESP-IDF
 v6.0.2 上产生独立的 `rev1_3` 与 `rev3_x` 产品任务和制品。这是产品专用兼容面，
-不是将每个示例矩阵翻倍。
+不是将每个示例矩阵翻倍。[芯片版本说明](revisions_ZH.md)还记录了对应的 MIPI DSI 时钟规则，
+并区分本板 SPI 显示屏与摄像头 CSI 通道。
 
 更新框架标签前，必须检查官方 ESP-IDF release 及旧版本到新版本之间的所有迁移指南。
 当前矩阵的主要跨版本升级由官方
@@ -161,5 +170,5 @@ next**。进度同时绑定最终 SHA、制品构建 SHA、profile 和规范化 
 
 Actions 通过只能证明所选源码工程能够使用记录的框架版本完成编译和打包，并非
 硬件在环（HIL）证据。它不能证明 ESP32-C6 协处理器固件的运行时兼容性，也不能验证显示、
-触摸、摄像头、音频、存储、USB、电源或无线功能；这些仍属于板级验收。本维护流程有意只把
-提交后的 Actions 作为编译证据，不在本地执行 ESP-IDF 构建。
+触摸、摄像头、音频、存储、USB、电源、无线或 Arduino sketch 的运行行为；这些仍属于板级
+验收。本维护流程有意只把提交后的 Actions 作为编译证据，不在本地执行 ESP-IDF 构建。

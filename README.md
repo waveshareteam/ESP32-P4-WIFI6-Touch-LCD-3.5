@@ -12,6 +12,7 @@
     <a href="https://docs.waveshare.com/ESP32-P4-WIFI6-Touch-LCD-3.5">📚 Documentation</a> ·
     <a href="#-firmware">📦 Firmware</a> ·
     <a href="examples/esp-idf/">🧩 ESP-IDF Examples</a> ·
+    <a href="examples/arduino/">🔧 Arduino Examples</a> ·
     <a href="schematic/ESP32-P4-WIFI6-Touch-LCD-3.5-schematic.pdf">🧾 Schematic</a>
   </p>
   <img src="assets/ESP32-P4-WIFI6-Touch-LCD-3.5-details-1.jpg" alt="Front and rear views of the Waveshare ESP32-P4-WIFI6-Touch-LCD-3.5 development board" width="600">
@@ -66,9 +67,9 @@ or product hardware revision; the profiles have incompatible binaries. See the
 [CI guide](docs/ci.md#esp32-p4-revision-profiles) for the explicit profile
 selection command and configuration differences.
 
-The canonical example path is now `examples/esp-idf/`. If an older bookmark or
-automation still uses `example/ESP-IDF/`, update it before selecting a project;
-the legacy [`example/`](example/) directory contains migration notes only.
+See the [revision guide](docs/revisions.md) before changing a chip-variant or
+MIPI DSI clock setting. Those choices are silicon-revision settings, not PCB
+revision labels.
 
 The Wi-Fi example communicates through the ESP32-C6 coprocessor. Keep the host
 components and coprocessor firmware compatible when changing its dependencies.
@@ -90,9 +91,30 @@ components and coprocessor firmware compatible when changing its dependencies.
 | [11_esp_brookesia_phone](examples/esp-idf/11_esp_brookesia_phone/) | ESP-Brookesia phone-style UI |
 | [12_esp32-p4-eye](examples/esp-idf/12_esp32-p4-eye/) | Camera, album, and on-device vision demo |
 
-Arduino sketches are not currently included in this repository. The Arduino
-inventory is zero; no Arduino build is represented as passing. If that surface
-is introduced, its default policy is `ChipVariant=postv3`.
+## 🧪 Arduino Examples
+
+[`examples/arduino/`](examples/arduino/) provides ten first-party sketches:
+Hello World, ASCII table, drawing board, LVGL 9, Wi-Fi analyzer, camera preview,
+camera ISP tuning, SD card, audio playback, and microphone recording. Install
+Arduino-ESP32 3.3.11 with `ChipVariant=postv3` for the default rev3.x silicon
+configuration. Use `ChipVariant=prev3` only for confirmed rev1.x silicon,
+including rev1.3. The bundled board library requires GFX Library for Arduino
+1.6.7; the LVGL sketch additionally uses LVGL 9.3.0. See the
+[Arduino guide](examples/arduino/README.md) for the board options, library
+installation, touch probing, and each sketch's scope.
+
+| Sketch | Focus |
+| --- | --- |
+| [01_HelloWorld](examples/arduino/examples/01_HelloWorld/) | ST7796 color bars and text |
+| [02_AsciiTable](examples/arduino/examples/02_AsciiTable/) | ST7796 ASCII character table |
+| [03_Drawing_board](examples/arduino/examples/03_Drawing_board/) | Display drawing and touch |
+| [04_LVGLV9_Arduino](examples/arduino/examples/04_LVGLV9_Arduino/) | LVGL 9 display and touch |
+| [05_GFX_ESPWiFiAnalyzer](examples/arduino/examples/05_GFX_ESPWiFiAnalyzer/) | Wi-Fi scan display |
+| [06_Camera_Preview](examples/arduino/examples/06_Camera_Preview/) | OV5647 preview |
+| [07_Camera_ISP_Tuning](examples/arduino/examples/07_Camera_ISP_Tuning/) | OV5647 ISP controls |
+| [08_SD_Card](examples/arduino/examples/08_SD_Card/) | MicroSD access |
+| [09_Audio_Playback](examples/arduino/examples/09_Audio_Playback/) | Audio playback |
+| [10_Mic_Record](examples/arduino/examples/10_Mic_Record/) | Microphone capture |
 
 ## ✅ Continuous Integration
 
@@ -108,6 +130,11 @@ profile-qualified `rev1_3` and `rev3_x` product jobs/artifacts on IDF v6.0.2.
 Those profiles use incompatible binaries and separate sdkconfigs/build
 directories. See the [CI guide](docs/ci.md) for exact profile settings and
 flashing safeguards.
+
+Arduino CI separately discovers and compiles all ten Arduino sketches against
+Arduino-ESP32 3.3.11 using the `postv3` default. A successful build remains
+compile evidence only; it does not prove display, touch, camera, audio, SD, or
+external-interface operation on a board.
 
 Every successful matrix entry uploads a flashable artifact derived from that
 project's `flasher_args.json`. The checked-in prebuilt image under `firmware/`
@@ -132,11 +159,11 @@ hardware-validation evidence.
 | Path | Purpose |
 | --- | --- |
 | [`examples/esp-idf/`](examples/esp-idf/) | First-party ESP-IDF projects |
+| [`examples/arduino/`](examples/arduino/) | First-party Arduino sketches and board library |
 | [`firmware/`](firmware/) | Prebuilt firmware image |
 | [`schematic/`](schematic/) | Product schematic |
 | [`assets/`](assets/) | Product images used by the documentation |
-| [`example/`](example/) | Compatibility notice for the former example path |
-| [`docs/`](docs/) | CI, component, and maintenance policy |
+| [`docs/`](docs/) | CI, component, revision, and maintenance policy |
 | [`.github/workflows/`](.github/workflows/) | Example, product-firmware, repository-policy, and documentation CI |
 | [`scripts/`](scripts/) | CI discovery, artifact packaging, and documentation validation helpers |
 
@@ -147,6 +174,7 @@ hardware-validation evidence.
 - [Schematic](schematic/ESP32-P4-WIFI6-Touch-LCD-3.5-schematic.pdf)
 - [CI and artifact policy](docs/ci.md)
 - [Component maintenance policy](docs/components.md)
+- [ESP32-P4 silicon revision guide](docs/revisions.md)
 - [Contributing guide](CONTRIBUTING.md)
 - [Support guide](SUPPORT.md)
 - [Open an Issue](https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-3.5/issues/new)

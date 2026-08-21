@@ -12,6 +12,7 @@
     <a href="https://docs.waveshare.net/ESP32-P4-WIFI6-Touch-LCD-3.5/">📚 产品文档</a> ·
     <a href="#-固件">📦 固件</a> ·
     <a href="examples/esp-idf/">🧩 ESP-IDF 示例</a> ·
+    <a href="examples/arduino/">🔧 Arduino 示例</a> ·
     <a href="schematic/ESP32-P4-WIFI6-Touch-LCD-3.5-schematic.pdf">🧾 原理图</a>
   </p>
   <img src="assets/ESP32-P4-WIFI6-Touch-LCD-3.5-details-1.jpg" alt="微雪 ESP32-P4-WIFI6-Touch-LCD-3.5 开发板正反面产品图" width="600">
@@ -60,9 +61,8 @@ ESP-IDF 示例、预编译固件镜像和产品原理图。
 产品硬件 revision；两种 profile 的二进制互不兼容。明确的 profile 选择命令和配置差异
 见 [CI 说明](docs/ci_ZH.md#esp32-p4-芯片版本配置)。
 
-规范示例路径现为 `examples/esp-idf/`。旧书签或自动化如果仍使用
-`example/ESP-IDF/`，请先更新后再选择工程；兼容目录 [`example/`](example/)
-只保留迁移说明。
+修改芯片变体或 MIPI DSI 时钟设置前，请先阅读[芯片版本说明](docs/revisions_ZH.md)。这些
+设置对应芯片 revision，而非 PCB 版本标签。
 
 Wi-Fi 示例通过 ESP32-C6 协处理器通信。调整相关依赖时，请保持主机端组件与
 协处理器固件兼容。
@@ -84,8 +84,27 @@ Wi-Fi 示例通过 ESP32-C6 协处理器通信。调整相关依赖时，请保�
 | [11_esp_brookesia_phone](examples/esp-idf/11_esp_brookesia_phone/) | ESP-Brookesia 手机风格界面 |
 | [12_esp32-p4-eye](examples/esp-idf/12_esp32-p4-eye/) | 摄像、相册和端侧视觉示例 |
 
-本仓库目前不包含 Arduino 示例。Arduino 清单为零，不会将 Arduino 构建表述为通过；若以后
-加入该表面，默认策略为 `ChipVariant=postv3`。
+## 🧪 Arduino 示例
+
+[`examples/arduino/`](examples/arduino/) 提供 10 个第一方 sketch：Hello World、ASCII 表、
+绘图板、LVGL 9、Wi-Fi 分析器、摄像头预览、摄像头 ISP 调参、SD 卡、音频播放和麦克风录音。
+默认 rev3.x 芯片配置应安装 Arduino-ESP32 3.3.11 并选择 `ChipVariant=postv3`；仅当芯片
+确认属于 rev1.x（含 rev1.3）时选择 `ChipVariant=prev3`。随仓库提供的板级库依赖
+GFX Library for Arduino 1.6.7；LVGL 示例还使用 LVGL 9.3.0。板卡选项、库安装、触摸探测和
+每个 sketch 的范围见 [Arduino 说明](examples/arduino/README_ZH.md)。
+
+| Sketch | 功能 |
+| --- | --- |
+| [01_HelloWorld](examples/arduino/examples/01_HelloWorld/) | ST7796 彩条与文字显示 |
+| [02_AsciiTable](examples/arduino/examples/02_AsciiTable/) | ST7796 ASCII 字符表 |
+| [03_Drawing_board](examples/arduino/examples/03_Drawing_board/) | 显示绘图与触摸 |
+| [04_LVGLV9_Arduino](examples/arduino/examples/04_LVGLV9_Arduino/) | LVGL 9 显示与触摸 |
+| [05_GFX_ESPWiFiAnalyzer](examples/arduino/examples/05_GFX_ESPWiFiAnalyzer/) | Wi-Fi 扫描显示 |
+| [06_Camera_Preview](examples/arduino/examples/06_Camera_Preview/) | OV5647 预览 |
+| [07_Camera_ISP_Tuning](examples/arduino/examples/07_Camera_ISP_Tuning/) | OV5647 ISP 控制 |
+| [08_SD_Card](examples/arduino/examples/08_SD_Card/) | MicroSD 卡访问 |
+| [09_Audio_Playback](examples/arduino/examples/09_Audio_Playback/) | 音频播放 |
+| [10_Mic_Record](examples/arduino/examples/10_Mic_Record/) | 麦克风采集 |
 
 ## ✅ 持续集成
 
@@ -97,6 +116,10 @@ Wi-Fi 示例通过 ESP32-C6 协处理器通信。调整相关依赖时，请保�
 源码 `12_esp32-p4-eye` 还会在 IDF v6.0.2 上生成带配置标识的 `rev1_3` 与 `rev3_x`
 产品任务/制品；两种配置使用独立 sdkconfig/构建目录，二进制互不兼容。确切配置和烧录
 保护见 [CI 说明](docs/ci_ZH.md)。
+
+Arduino CI 会独立发现并使用默认 `postv3` 配置编译全部 10 个 Arduino sketch，使用
+Arduino-ESP32 3.3.11。构建成功仍仅代表编译证据，不证明显示、触摸、摄像头、音频、SD 卡或
+外接接口能在实机上正常工作。
 
 每个成功的矩阵任务都会根据该工程的 `flasher_args.json` 上传可刷写制品，仓库
 `firmware/` 下已有的预编译镜像不会混入 CI 产物。项目选择、版本更新、制品内容和
@@ -116,11 +139,11 @@ Wi-Fi 示例通过 ESP32-C6 协处理器通信。调整相关依赖时，请保�
 | 路径 | 用途 |
 | --- | --- |
 | [`examples/esp-idf/`](examples/esp-idf/) | 第一方 ESP-IDF 工程 |
+| [`examples/arduino/`](examples/arduino/) | 第一方 Arduino sketch 与板级库 |
 | [`firmware/`](firmware/) | 预编译固件镜像 |
 | [`schematic/`](schematic/) | 产品原理图 |
 | [`assets/`](assets/) | 文档使用的产品图片 |
-| [`example/`](example/) | 原示例路径的兼容迁移说明 |
-| [`docs/`](docs/) | CI、组件与维护策略 |
+| [`docs/`](docs/) | CI、组件、芯片版本与维护策略 |
 | [`.github/workflows/`](.github/workflows/) | 示例、产品固件、仓库策略与文档 CI |
 | [`scripts/`](scripts/) | CI 发现、制品打包与文档验证辅助脚本 |
 
@@ -131,6 +154,7 @@ Wi-Fi 示例通过 ESP32-C6 协处理器通信。调整相关依赖时，请保�
 - [原理图](schematic/ESP32-P4-WIFI6-Touch-LCD-3.5-schematic.pdf)
 - [CI 与制品策略](docs/ci_ZH.md)
 - [组件维护策略](docs/components_ZH.md)
+- [ESP32-P4 芯片版本说明](docs/revisions_ZH.md)
 - [贡献指南](CONTRIBUTING_ZH.md)
 - [支持指南](SUPPORT_ZH.md)
 - [提交 Issue](https://github.com/waveshareteam/ESP32-P4-WIFI6-Touch-LCD-3.5/issues/new)

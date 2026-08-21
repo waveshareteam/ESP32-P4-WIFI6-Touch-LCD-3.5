@@ -216,7 +216,7 @@ bool bsp_extra_player_is_playing_by_index(file_iterator_instance_t *instance, in
 
 /**
  * Legacy migration compatibility helpers. They preserve the pre-migration
- * inert and SDMMC_SLOT_NO_CD behavior; the managed BSP v2.0.0 exposes no
+ * inert and SDMMC_SLOT_NO_CD behavior; the managed BSP v2.0.1 exposes no
  * corresponding flashlight, card-detect, or sleep helper APIs. These are not
  * declarations of additional hardware support.
  */

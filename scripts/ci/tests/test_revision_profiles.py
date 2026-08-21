@@ -44,8 +44,19 @@ class RevisionProfileTests(unittest.TestCase):
                 for profile, expected in self.policy["profiles"].items():
                     self.assertEqual(parse_sdkconfig(cmake_path.parent / f"sdkconfig.defaults.{profile}"), expected)
 
-    def test_central_policy_encodes_arduino_zero_inventory_postv3(self) -> None:
-        self.assertEqual(self.policy["arduino"], {"expected_sketch_count": 0, "default_chip_variant": "postv3"})
+    def test_central_policy_encodes_ten_postv3_arduino_sketches(self) -> None:
+        self.assertEqual(
+            self.policy["arduino"],
+            {
+                "expected_sketch_count": 10,
+                "default_chip_variant": "postv3",
+                "default_fqbn": (
+                    "esp32:esp32:esp32p4:ChipVariant=postv3,PSRAM=enabled,FlashSize=16M,"
+                    "FlashMode=qio,FlashFreq=80,PartitionScheme=app3M_fat9M_16MB,"
+                    "UploadMode=default,UploadSpeed=921600"
+                ),
+            },
+        )
 
     def test_flasher_rejects_unsupported_silicon_revision_gaps(self) -> None:
         flasher = (ROOT / "scripts" / "Flash-CI-Firmware.ps1").read_text(encoding="utf-8")
@@ -82,6 +93,18 @@ class RevisionProfileTests(unittest.TestCase):
             errors = POLICY.check_removed_managed_bsp_display_symbols(root)
 
         self.assertTrue(any("retains removed BSP display Kconfig symbols" in error for error in errors))
+
+    def test_display_config_policy_skips_generated_idf_trees(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for generated_name in ("build-rev3_x", "managed_components"):
+                generated_header = root / "07_Displaycolorbar" / generated_name / "dependency" / "invalid.h"
+                generated_header.parent.mkdir(parents=True, exist_ok=True)
+                generated_header.write_bytes(b"\xfc")
+
+            errors = POLICY.check_removed_managed_bsp_display_symbols(root)
+
+        self.assertEqual(errors, [])
 
     def test_display_config_policy_rejects_incomplete_app_buffer_contract(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -124,54 +147,6 @@ class RevisionProfileTests(unittest.TestCase):
 
         self.assertTrue(any("must not directly depend" in error for error in errors))
         self.assertTrue(any("must retain 21" in error for error in errors))
-
-    def test_example12_lvgl8_managed_bsp_shim_policy_rejects_leaks(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            cmake = root / "CMakeLists.txt"
-            shim = root / "lvgl8_managed_bsp.h"
-            cmake.write_text(
-                "idf_component_get_property(lvgl8_managed_bsp_target\n"
-                "    wrong__bsp COMPONENT_LIB)\n"
-                "add_compile_options(-include broken.h)\n"
-                "target_compile_options(\"${lvgl8_managed_bsp_target}\" PUBLIC\n"
-                "    \"SHELL:-include \\\"${lvgl8_managed_bsp_shim}\\\"\")\n",
-                encoding="utf-8",
-            )
-            shim.write_text(
-                '#include "lvgl.h"\ntypedef lv_disp_t lv_display_t;\n', encoding="utf-8"
-            )
-            errors = POLICY.check_example12_lvgl8_managed_bsp_shim(cmake, shim)
-
-        self.assertTrue(any("must guard" in error for error in errors))
-        self.assertTrue(any("exactly the managed BSP, bsp_extra, and main" in error for error in errors))
-        self.assertTrue(any("exactly its three direct managed BSP consumers" in error for error in errors))
-        self.assertTrue(any("public or global" in error for error in errors))
-
-    def test_example12_lvgl8_managed_bsp_shim_policy_rejects_foundations_after_lvgl(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            cmake = root / "CMakeLists.txt"
-            shim = root / "lvgl8_managed_bsp.h"
-            cmake.write_text("", encoding="utf-8")
-            shim.write_text(
-                '#include "lvgl.h"\n'
-                "#include <stdbool.h>\n"
-                "#include <stdint.h>\n"
-                '#include "esp_err.h"\n'
-                "#if LVGL_VERSION_MAJOR == 8\n"
-                "typedef lv_disp_t lv_display_t;\n"
-                "typedef lv_disp_rot_t lv_disp_rotation_t;\n"
-                "#elif LVGL_VERSION_MAJOR == 9\n"
-                "#else\n"
-                "#error unsupported\n"
-                "#endif\n",
-                encoding="utf-8",
-            )
-            errors = POLICY.check_example12_lvgl8_managed_bsp_shim(cmake, shim)
-
-        self.assertTrue(any("bool, uint32_t, and esp_err_t foundations" in error for error in errors))
-
 
 if __name__ == "__main__":
     unittest.main()

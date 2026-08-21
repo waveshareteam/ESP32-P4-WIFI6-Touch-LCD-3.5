@@ -26,6 +26,7 @@ from discover_esp_idf import (
 
 CANONICAL_EXAMPLE_ROOT = PurePosixPath("examples/esp-idf")
 LEGACY_EXAMPLE_ROOT = PurePosixPath("example/ESP-IDF")
+ARDUINO_EXAMPLE_ROOT = PurePosixPath("examples/arduino")
 FIRMWARE_ROOT = PurePosixPath("firmware")
 RELEASE_ROOT = PurePosixPath("releases")
 PRODUCT_FIRMWARE_PROJECT = "12_esp32-p4-eye"
@@ -73,6 +74,13 @@ DOCUMENTATION_POLICY_FILES = {
     "config/ci-routing.json",
     "config/markdown-audit.json",
     "scripts/check_readme.py",
+}
+ARDUINO_BUILD_FILES = {
+    ".github/workflows/arduino-policy.yml",
+    "config/revision-profiles.json",
+    "scripts/discover_arduino_examples.py",
+    "scripts/ci/check_repository_policy.py",
+    "scripts/ci/classify_changes.py",
 }
 GLOBAL_BUILD_PREFIXES = (
     PurePosixPath(".github/workflows"),
@@ -226,6 +234,35 @@ def route_path(path_text: str, status: str, project_names: set[str]) -> Route:
             "none",
             "release delivery is reviewed separately from example CI",
             docs_only,
+        )
+
+    if is_under(path, ARDUINO_EXAMPLE_ROOT):
+        if is_document_path(path):
+            return Route(
+                path_text,
+                status,
+                "arduino_documentation",
+                "none",
+                "documentation beside an Arduino example does not change ESP-IDF builds",
+                True,
+            )
+        return Route(
+            path_text,
+            status,
+            "arduino_source",
+            "none",
+            "Arduino sources use their dedicated workflow and do not select ESP-IDF projects",
+            False,
+        )
+
+    if path_text == "scripts/discover_arduino_examples.py":
+        return Route(
+            path_text,
+            status,
+            "arduino_source",
+            "none",
+            "Arduino discovery is validated by the dedicated Arduino workflow",
+            False,
         )
 
     for examples_root in (CANONICAL_EXAMPLE_ROOT, LEGACY_EXAMPLE_ROOT):
@@ -406,6 +443,11 @@ def classify_changes(changes: list[Change]) -> dict[str, object]:
         )
         for route in routes
     )
+    arduino_build_required = any(
+        route.kind in {"arduino_source", "unknown", "unknown_example_path"}
+        or route.path in ARDUINO_BUILD_FILES
+        for route in routes
+    )
     return {
         "schema_version": 1,
         "scope": {
@@ -414,6 +456,7 @@ def classify_changes(changes: list[Change]) -> dict[str, object]:
             "docs_only": all(route.docs_only for route in routes),
             "example_build_required": bool(selected),
             "product_firmware_required": product_firmware_required,
+            "arduino_build_required": arduino_build_required,
             "firmware_touched": any(is_under(PurePosixPath(path), FIRMWARE_ROOT) for path in changed_paths),
             "release_review_required": bool(delivery_paths),
             "delivery_paths": delivery_paths,
@@ -442,6 +485,7 @@ def classify_selector(selector: str) -> dict[str, object]:
             "product_firmware_required": any(
                 project.name == PRODUCT_FIRMWARE_PROJECT for project in selected
             ),
+            "arduino_build_required": False,
             "firmware_touched": False,
             "release_review_required": False,
             "delivery_paths": [],
@@ -468,6 +512,10 @@ def append_github_outputs(path: Path, report: dict[str, object]) -> None:
         output.write(
             "product_firmware_required="
             f"{str(scope['product_firmware_required']).lower()}\n"
+        )
+        output.write(
+            "arduino_build_required="
+            f"{str(scope['arduino_build_required']).lower()}\n"
         )
         output.write(f"firmware_touched={str(scope['firmware_touched']).lower()}\n")
         output.write(

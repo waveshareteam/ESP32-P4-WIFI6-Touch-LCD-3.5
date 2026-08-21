@@ -8,7 +8,7 @@
 
 | 组件 | 位置 | 结论 |
 | --- | --- | --- |
-| ESP32-P4-WIFI6-Touch-LCD-3.5 BSP | 产品示例 | 托管依赖 `waveshare/esp32_p4_wifi6_touch_lcd_3_5 ==2.0.0` |
+| ESP32-P4-WIFI6-Touch-LCD-3.5 BSP | 产品示例 | 托管依赖 `waveshare/esp32_p4_wifi6_touch_lcd_3_5 ==2.0.1` |
 | `bsp_extra` | 存在该目录的产品示例 | 仅保留为产品专用胶水 |
 | `sd_card` | 示例 05 | 保留为示例测试支持 |
 | `esp_painter` | 示例 12 | 保留为产品 UI/绘制支持 |
@@ -18,9 +18,14 @@
 | LVGL 运行时 | 示例 12 | 托管 BSP 引入 `esp_lvgl_adapter`；示例 12 因 21 个 SquareLine 生成的图像资源而直接固定 `lvgl/lvgl` 为 `8.3.*` |
 
 六份复制的本地 BSP 组件变体已删除。公开依赖精确使用
-[`waveshare/esp32_p4_wifi6_touch_lcd_3_5 ==2.0.0`](https://components.espressif.com/components/waveshare/esp32_p4_wifi6_touch_lcd_3_5/versions/2.0.0/readme)。
-该注册表版本对应官方不可变源码提交 `a7c084c0425ef104f3ecf288f3afd1ff8ef4f97b`；迁移时已
+[`waveshare/esp32_p4_wifi6_touch_lcd_3_5 ==2.0.1`](https://components.espressif.com/components/waveshare/esp32_p4_wifi6_touch_lcd_3_5/versions/2.0.1/readme)。
+该注册表版本对应官方不可变源码提交 `3bbbaa429bc719b80c4a367ea2a30f217aa727dc`；迁移时已
 审计这一提交，产品 manifest 和公开依赖说明均以以上注册表包及版本为准。
+
+在本仓库当前版本中，2.0.1 已发布到 Component Registry，所有产品 manifest 均固定使用该
+版本。组件或 BSP 改动即使已合并，在对应 Registry 版本公开发布前也不能成为产品依赖。不得用 Git URL、分支、
+提交、本地路径或未发布版本替换该版本：这些写法不适用于可发布的产品 manifest，并可能被
+Component Registry CI 拒绝。
 
 ## 托管 BSP 边界
 
@@ -32,10 +37,16 @@
 
 ### 显示配置契约
 
-官方 BSP 2.0.0 的不可变公共头将显示固定为 RGB565、大端颜色顺序和每像素 16 位。因此，
+官方 BSP 2.0.1 的不可变公共头将显示固定为 RGB565、大端颜色顺序和每像素 16 位。因此，
 示例 09 在应用中无条件使用 RGB565 视频格式契约，而不再选择已移除的 BSP Kconfig
 颜色格式选项；示例 10 在应用中将 `APP_LCD_BUFFER_COUNT` 固定为 2，而不再使用已移除的
 DPI 缓冲区 Kconfig 选项。这些源码契约不构成硬件在环（HIL）验证声明。
+
+Registry BSP 2.0.1 的 `bsp/display.h` 还声明了 `esp_err_t`，但没有包含 `esp_err.h`。
+因此，示例 12 的三个直接使用方会先包含 `esp_err.h`。独立的
+[BSP 2.0.2 Pull Request](https://github.com/waveshareteam/Waveshare-ESP32-components/pull/203)
+会让该公共头自包含。在 2.0.2 发布到 Component Registry 前，产品必须继续使用 2.0.1；
+只有发布并验证后才可删除这一兼容处理。
 
 ## 依赖更新规则
 
@@ -44,13 +55,15 @@ DPI 缓冲区 Kconfig 选项。这些源码契约不构成硬件在环（HIL）�
 3. 每次只更新一个依赖族，并在 manifest 中记录原因。
 4. 示例 12 的 21 个 SquareLine 生成图像资源使用 LVGL 8 描述符契约，因此保持
    `lvgl/lvgl 8.3.*`。托管 BSP 提供 `esp_lvgl_adapter`；不要添加未被应用直接使用的
-   `esp_lvgl_port` 依赖。仅在示例 12 的托管 BSP、`bsp_extra` 和 `main` 目标解析托管 BSP
-   公共头时，私有强制包含兼容头会先提供托管公共头缺少的 ESP-IDF/基础 `bool`、`uint32_t`
-   与 `esp_err_t` 类型，再将 LVGL 8 的 `lv_disp_t` 和 `lv_disp_rot_t` 拼写映射为 BSP 所需
-   类型；它不会恢复本地 BSP，也不会传播到其他示例、目标或全局设置。迁移到 LVGL 9 前必须
-   重新生成并审计完整 UI。
+   `esp_lvgl_port` 依赖。BSP 2.0.1 已直接提供匹配的 LVGL 8 旋转类型，因此删除原有的产品侧
+   私有强制包含兼容头。迁移到 LVGL 9 前仍须重新生成并审计完整 UI。
 5. 示例 10 的 `espressif/esp_audio_codec` 保持为 `>=2.3.0,<2.6.0`：v2.6+
    要求 ESP32-P4 为 3 或更新的修订版，而 `rev1_3` 仍保留为显式兼容 profile。该依赖约束
    不构成硬件验证声明。
-6. 以提交后的 GitHub Actions 矩阵作为编译证据。构建通过不是硬件在环（HIL）证据，
+6. 先提交共享组件改动，再提交消费它的 BSP；只有所需包发布到 Component Registry 后才更新
+   产品 manifest。以上应保持为可独立评审的 Pull Request。临时本地组件仅可用于本地排查，
+   不得提交为 Registry 发布版本的替代品。
+7. Arduino 板级库作为源码位于 `examples/arduino/`，不会修改或覆盖 ESP-IDF 示例使用的托管
+   BSP 依赖。
+8. 以提交后的 GitHub Actions 矩阵作为编译证据。构建通过不是硬件在环（HIL）证据，
    不能替代实机验证。

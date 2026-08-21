@@ -13,12 +13,18 @@
   ],
   "firmware_patterns": [],
   "esp_idf_shared_patterns": [],
-  "arduino_shared_patterns": [],
+  "arduino_shared_patterns": [
+    "examples/arduino/common/**",
+    "examples/arduino/libraries/**"
+  ],
   "esp_idf_global_patterns": [
     "config/revision-profiles.json",
     "example/ESP-IDF/**"
   ],
-  "arduino_global_patterns": [],
+  "arduino_global_patterns": [
+    "config/revision-profiles.json",
+    "scripts/discover_arduino_examples.py"
+  ],
   "global_build_patterns": [
     "Flash-CI-Firmware.cmd",
     "scripts/Flash-CI-Firmware.ps1",

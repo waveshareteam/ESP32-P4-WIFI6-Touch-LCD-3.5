@@ -260,7 +260,7 @@ bool bsp_extra_player_is_playing_by_index(file_iterator_instance_t *instance, in
 esp_err_t bsp_extra_flashlight_init(void)
 {
     /* Legacy compatibility helper: preserves the pre-migration inert behavior.
-     * The managed BSP v2.0.0 exposes no corresponding flashlight API. */
+     * The managed BSP v2.0.1 exposes no corresponding flashlight API. */
     return ESP_OK;
 }
 
@@ -287,5 +287,5 @@ bool bsp_extra_sdcard_is_present(void)
 void bsp_extra_enter_sleep_init(void)
 {
     /* Legacy compatibility helper: preserves the pre-migration no-op contract.
-     * The managed BSP v2.0.0 exposes no corresponding sleep helper API. */
+     * The managed BSP v2.0.1 exposes no corresponding sleep helper API. */
 }

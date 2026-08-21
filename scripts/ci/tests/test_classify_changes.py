@@ -67,6 +67,28 @@ class ClassifyChangesTests(unittest.TestCase):
         self.assertEqual(self.selected_names(report), ["09_video_lcd_display"])
         self.assertFalse(report["scope"]["product_firmware_required"])
 
+    def test_arduino_surface_does_not_select_esp_idf_projects(self) -> None:
+        source = self.report(
+            "M\texamples/arduino/examples/01_HelloWorld/01_HelloWorld.ino"
+        )
+        self.assertEqual(source["esp_idf"]["mode"], "none")
+        self.assertEqual(self.selected_names(source), [])
+        self.assertFalse(source["scope"]["docs_only"])
+        self.assertFalse(source["scope"]["product_firmware_required"])
+        self.assertTrue(source["scope"]["arduino_build_required"])
+        self.assertEqual(source["unknown_paths"], [])
+        self.assertEqual(source["routes"][0]["kind"], "arduino_source")
+
+        documentation = self.report(
+            "M\texamples/arduino/examples/01_HelloWorld/README.md"
+        )
+        self.assertEqual(documentation["esp_idf"]["mode"], "none")
+        self.assertTrue(documentation["scope"]["docs_only"])
+        self.assertFalse(documentation["scope"]["product_firmware_required"])
+        self.assertFalse(documentation["scope"]["arduino_build_required"])
+        self.assertEqual(documentation["unknown_paths"], [])
+        self.assertEqual(documentation["routes"][0]["kind"], "arduino_documentation")
+
     def test_product_firmware_routing_is_conservative(self) -> None:
         product = self.report(
             "M\texamples/esp-idf/12_esp32-p4-eye/main/main.c"
@@ -76,6 +98,21 @@ class ClassifyChangesTests(unittest.TestCase):
         self.assertTrue(profile["scope"]["product_firmware_required"])
         unknown = self.report("A\ttools/new_generator.py")
         self.assertTrue(unknown["scope"]["product_firmware_required"])
+        self.assertTrue(unknown["scope"]["arduino_build_required"])
+
+    def test_esp_idf_source_does_not_select_arduino_builds(self) -> None:
+        report = self.report(
+            "M\texamples/esp-idf/09_video_lcd_display/main/app_video.c"
+        )
+        self.assertFalse(report["scope"]["arduino_build_required"])
+
+        revision_policy = self.report("M\tconfig/revision-profiles.json")
+        self.assertTrue(revision_policy["scope"]["arduino_build_required"])
+
+        discovery = self.report("M\tscripts/discover_arduino_examples.py")
+        self.assertEqual(discovery["esp_idf"]["mode"], "none")
+        self.assertTrue(discovery["scope"]["arduino_build_required"])
+        self.assertEqual(discovery["unknown_paths"], [])
 
     def test_cmake_is_build_input_but_readme_txt_is_documentation(self) -> None:
         cmake = self.report(
@@ -101,6 +138,15 @@ class ClassifyChangesTests(unittest.TestCase):
                 self.assertEqual(report["esp_idf"]["mode"], "all")
                 self.assertEqual(len(self.selected_names(report)), 12)
                 self.assertTrue(report["scope"]["product_firmware_required"])
+
+    def test_mixed_arduino_and_global_change_remains_global(self) -> None:
+        report = self.report(
+            "M\texamples/arduino/examples/01_HelloWorld/01_HelloWorld.ino",
+            "M\t.github/workflows/esp-idf.yml",
+        )
+        self.assertEqual(report["esp_idf"]["mode"], "all")
+        self.assertEqual(len(self.selected_names(report)), 12)
+        self.assertTrue(report["scope"]["product_firmware_required"])
 
     def test_firmware_files_never_enter_example_matrix(self) -> None:
         markdown = self.report("M\tfirmware/README.md")
@@ -183,6 +229,7 @@ class ClassifyChangesTests(unittest.TestCase):
             self.assertEqual(outputs["mode"], "selected")
             self.assertEqual(outputs["count"], "1")
             self.assertEqual(outputs["product_firmware_required"], "false")
+            self.assertEqual(outputs["arduino_build_required"], "false")
             self.assertEqual(
                 json.loads(outputs["examples"])[0]["name"],
                 "09_video_lcd_display",

@@ -15,9 +15,10 @@ firmware compilation so every required check has a stable meaning.
 - [`product-firmware.yml`](../.github/workflows/product-firmware.yml) builds the
   maintained product source once for each revision profile when conservative
   routing says that product firmware is affected.
-- [`arduino-policy.yml`](../.github/workflows/arduino-policy.yml) enforces the
-  current zero-sketch inventory and future `ChipVariant=postv3` default without
-  claiming an Arduino compile.
+- [`arduino-policy.yml`](../.github/workflows/arduino-policy.yml) discovers and,
+  when Arduino or shared build inputs change, compiles the ten first-party
+  Arduino sketches with Arduino-ESP32 3.3.11 and the default
+  `ChipVariant=postv3` configuration.
 - [`repository-policy.yml`](../.github/workflows/repository-policy.yml) runs the
   deterministic profile, packaging, routing, and Windows flasher contracts.
 
@@ -25,6 +26,8 @@ These workflows run on every pull request and on pushes to `main`. Path filterin
 is performed inside the repository by a versioned classifier, rather than only
 by GitHub's workflow trigger filters, so a required check is still reported for
 documentation-only changes.
+For a change that does not affect Arduino, the stable Arduino aggregate check
+still runs while its compile matrix is skipped.
 
 ## Change routing
 
@@ -41,9 +44,12 @@ unsafe scope rather than silently assuming that every project should build.
 | Bundled Brookesia `test_apps` | No product-example build |
 | Checked-in firmware/release delivery | No source build; flag delivery review |
 
-Renames route both the old and new paths. The old
-`example/ESP-IDF` spelling is recognized only so migrations and stale diffs are
-classified safely; the canonical project root is `examples/esp-idf`.
+Arduino sketch or bundled board-library source is routed to the independent
+Arduino matrix and does not select an ESP-IDF example by itself. Shared CI,
+workflow, or profile inputs conservatively select both applicable matrices.
+
+Renames route both the old and new paths so migrations and stale diffs are
+classified safely. The canonical ESP-IDF project root is `examples/esp-idf`.
 
 Manual dispatch accepts `all`, one example directory name such as
 `04_wifistation`, or a repository-relative path inside an example. Absolute,
@@ -67,9 +73,12 @@ stable ESP-IDF tags:
 
 The standard example matrix is 12 projects × 2 ESP-IDF versions = 24 builds;
 all of those builds use the `rev3_x` profile. It is not doubled for every
-silicon-revision profile. The current Arduino inventory is zero, so the
-repository does not claim or run an Arduino build. Its default Arduino policy,
-if an Arduino surface is added later, is `ChipVariant=postv3`.
+silicon-revision profile. When its route is selected, Arduino CI separately discovers the ten sketches in
+[`examples/arduino/`](../examples/arduino/), compiles them with
+Arduino-ESP32 3.3.11, and defaults to `ChipVariant=postv3`. `ChipVariant=prev3`
+is solely for confirmed rev1.x silicon, including rev1.3. The Arduino board
+library requires GFX Library for Arduino 1.6.7; the LVGL sketch requires LVGL
+9.3.0. See the [Arduino guide](../examples/arduino/README.md).
 
 The matrix uses `fail-fast: false` and a bounded parallelism of six. Component
 Manager downloads and ccache data are isolated by runner OS, ESP-IDF version,
@@ -107,6 +116,8 @@ the flasher rejects them. The maintained product source is
 [`12_esp32-p4-eye`](../examples/esp-idf/12_esp32-p4-eye/): on ESP-IDF v6.0.2 it
 produces separate `rev1_3` and `rev3_x` product jobs and artifacts. This is a
 product-specific compatibility surface, not a second matrix for every example.
+The [revision guide](revisions.md) records the matching MIPI DSI clock rule and
+the distinction between this board's SPI display and its camera CSI path.
 
 Update a framework tag only after checking the official ESP-IDF release and all
 migration guides between the old and new versions. For the current matrix, the
@@ -203,6 +214,6 @@ A successful Actions run proves only that the selected source projects compile
 and package with the recorded framework versions. It is not hardware-in-the-loop
 (HIL) evidence and does not prove runtime compatibility of the ESP32-C6
 coprocessor firmware, or validate display, touch, camera, audio, storage, USB,
-power, or radio behavior. Those remain board-level acceptance tests. This
+power, radio, or Arduino sketch behavior. Those remain board-level acceptance tests. This
 repository intentionally uses post-commit Actions as its compile evidence; the
 maintenance workflow does not perform a local ESP-IDF build.

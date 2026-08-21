@@ -20,6 +20,7 @@
 #include "esp_log.h"
 #include "lvgl.h"
 
+#include "esp_err.h"
 #include "bsp/display.h"
 
 #include "ui_extra.h"

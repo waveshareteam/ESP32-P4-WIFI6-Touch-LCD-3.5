@@ -11,6 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES = ROOT / "examples" / "esp-idf"
+ARDUINO_EXAMPLES = ROOT / "examples" / "arduino" / "examples"
 PROFILE_CONFIG = ROOT / "config" / "revision-profiles.json"
 EXAMPLE10_MANIFEST = EXAMPLES / "10_mp4_player" / "main" / "idf_component.yml"
 EXAMPLE09_VIDEO_HEADER = EXAMPLES / "09_video_lcd_display" / "main" / "app_video.h"
@@ -19,13 +20,6 @@ EXAMPLE10_MAIN = EXAMPLES / "10_mp4_player" / "main" / "main.c"
 EXAMPLE10_DEFAULTS = EXAMPLES / "10_mp4_player" / "sdkconfig.defaults"
 EXAMPLE12_MANIFEST = EXAMPLES / "12_esp32-p4-eye" / "main" / "idf_component.yml"
 EXAMPLE12_IMAGES = EXAMPLES / "12_esp32-p4-eye" / "main" / "ui" / "images"
-EXAMPLE12_CMAKE = EXAMPLES / "12_esp32-p4-eye" / "CMakeLists.txt"
-EXAMPLE12_LVGL8_MANAGED_BSP_SHIM = EXAMPLES / "12_esp32-p4-eye" / "compat" / "lvgl8_managed_bsp.h"
-EXAMPLE12_LVGL8_MANAGED_BSP_COMPONENTS = (
-    "waveshare__esp32_p4_wifi6_touch_lcd_3_5",
-    "bsp_extra",
-    "main",
-)
 REMOVED_MANAGED_BSP_DISPLAY_SYMBOLS = (
     "CONFIG_BSP_LCD_" + "COLOR_FORMAT",
     "CONFIG_BSP_LCD_" + "DPI_BUFFER_NUMS",
@@ -66,12 +60,22 @@ def parse_sdkconfig(path: Path) -> dict[str, str]:
 def check_arduino(policy: dict[str, object]) -> list[str]:
     arduino = policy["arduino"]
     expected = arduino["expected_sketch_count"]
-    sketches = list((ROOT / "examples" / "arduino").glob("**/*.ino")) if (ROOT / "examples" / "arduino").exists() else []
-    errors = []
+    sketches = sorted(ARDUINO_EXAMPLES.glob("*/*.ino")) if ARDUINO_EXAMPLES.is_dir() else []
+    errors: list[str] = []
     if len(sketches) != expected:
         errors.append(f"Arduino sketch count is {len(sketches)}, expected {expected}")
+    for sketch in sketches:
+        if sketch.stem != sketch.parent.name:
+            errors.append(f"Arduino sketch must match its directory name: {sketch.relative_to(ROOT)}")
     if arduino["default_chip_variant"] != "postv3":
         errors.append("Arduino default ChipVariant must be postv3")
+    expected_fqbn = (
+        "esp32:esp32:esp32p4:ChipVariant=postv3,PSRAM=enabled,FlashSize=16M,"
+        "FlashMode=qio,FlashFreq=80,PartitionScheme=app3M_fat9M_16MB,"
+        "UploadMode=default,UploadSpeed=921600"
+    )
+    if arduino.get("default_fqbn") != expected_fqbn:
+        errors.append("Arduino default FQBN must select postv3, 16M QIO80 flash, PSRAM, and app3M_fat9M_16MB")
     return errors
 
 
@@ -174,6 +178,9 @@ def is_first_party_esp_idf_source_or_config(path: Path) -> bool:
 def check_removed_managed_bsp_display_symbols(examples: Path = EXAMPLES) -> list[str]:
     errors: list[str] = []
     for path in sorted(examples.rglob("*")):
+        relative_parts = path.relative_to(examples).parts
+        if any(part == "managed_components" or part.startswith("build") for part in relative_parts):
+            continue
         if not path.is_file() or not is_first_party_esp_idf_source_or_config(path):
             continue
         text = path.read_text(encoding="utf-8")
@@ -209,61 +216,6 @@ def check_example12_lvgl_contract(
     return errors
 
 
-def check_example12_lvgl8_managed_bsp_shim(
-    cmake_path: Path = EXAMPLE12_CMAKE,
-    shim_path: Path = EXAMPLE12_LVGL8_MANAGED_BSP_SHIM,
-) -> list[str]:
-    errors: list[str] = []
-    if not shim_path.is_file():
-        return ["Example 12 LVGL 8 managed BSP compatibility shim is missing"]
-
-    shim = shim_path.read_text(encoding="utf-8")
-    required_includes = (
-        "#include <stdbool.h>",
-        "#include <stdint.h>",
-        '#include "esp_err.h"',
-        '#include "lvgl.h"',
-    )
-    include_positions = tuple(shim.find(token) for token in required_includes)
-    if -1 in include_positions or include_positions != tuple(sorted(include_positions)):
-        errors.append("Example 12 LVGL 8 shim must include bool, uint32_t, and esp_err_t foundations before lvgl.h")
-
-    required_shim = (
-        "#if LVGL_VERSION_MAJOR == 8",
-        "typedef lv_disp_t lv_display_t;",
-        "typedef lv_disp_rot_t lv_disp_rotation_t;",
-        "#elif LVGL_VERSION_MAJOR == 9",
-        "#error",
-    )
-    if any(token not in shim for token in required_shim):
-        errors.append("Example 12 LVGL 8 shim must guard the required LVGL type aliases")
-
-    cmake = cmake_path.read_text(encoding="utf-8")
-    targets = re.search(
-        r"(?ms)^set\(lvgl8_managed_bsp_components\s*(?P<targets>.*?)^\)", cmake
-    )
-    configured_components = (
-        tuple(re.findall(r"(?m)^\s*([A-Za-z0-9_]+)\s*$", targets.group("targets")))
-        if targets
-        else ()
-    )
-    if configured_components != EXAMPLE12_LVGL8_MANAGED_BSP_COMPONENTS:
-        errors.append("Example 12 must list exactly the managed BSP, bsp_extra, and main LVGL 8 shim consumers")
-
-    required_loop = (
-        "foreach(lvgl8_managed_bsp_component IN LISTS lvgl8_managed_bsp_components)",
-        'idf_component_get_property(lvgl8_managed_bsp_target\n        "${lvgl8_managed_bsp_component}" COMPONENT_LIB)',
-        'NOT TARGET "${lvgl8_managed_bsp_target}"',
-        'target_compile_options("${lvgl8_managed_bsp_target}" PRIVATE\n        "SHELL:-include \\"${lvgl8_managed_bsp_shim}\\"")',
-        "endforeach()",
-    )
-    if any(token not in cmake for token in required_loop):
-        errors.append("Example 12 must privately force-include the shim on exactly its three direct managed BSP consumers")
-    if any(token in cmake for token in ("add_compile_options(", "include_directories(", "target_compile_options(PUBLIC", "target_compile_options(INTERFACE")):
-        errors.append("Example 12 LVGL 8 managed BSP shim must not use public or global compile settings")
-    return errors
-
-
 def check_workflows() -> list[str]:
     errors = []
     examples = (ROOT / ".github" / "workflows" / "esp-idf.yml").read_text(encoding="utf-8")
@@ -282,8 +234,21 @@ def check_workflows() -> list[str]:
         errors.append("product firmware workflow is missing the two-profile artifact contract")
     if product.count(f"ref: {exact_head}") < 2 or product.count(exact_head) < 5 or "--git-sha" not in product:
         errors.append("product firmware workflow must check out and package the exact final head SHA")
-    if "check_repository_policy.py --arduino-only" not in arduino or "compile" in arduino.casefold():
-        errors.append("Arduino policy workflow must verify inventory only, without a compile claim")
+    required_arduino = (
+        "ARDUINO_CORE_VERSION: \"3.3.11\"",
+        "version: \"1.5.1\"",
+        "ChipVariant=postv3,PSRAM=enabled,FlashSize=16M,FlashMode=qio,FlashFreq=80,PartitionScheme=app3M_fat9M_16MB,UploadMode=default,UploadSpeed=921600",
+        "scripts/discover_arduino_examples.py",
+        "arduino-cli compile",
+        "GFX Library for Arduino@1.6.7",
+        "lvgl@9.3.0",
+        "Arduino build matrix",
+        "arduino_build_required",
+    )
+    if any(token not in arduino for token in required_arduino):
+        errors.append("Arduino workflow is missing the published-library 10-sketch compile contract")
+    if "Package firmware" in arduino or "upload-artifact" in arduino.casefold():
+        errors.append("Arduino workflow must compile examples only and must not package firmware")
     if f"ref: {exact_head}" not in docs or f"ref: {exact_head}" not in arduino or repository_policy.count(f"ref: {exact_head}") < 2:
         errors.append("final-SHA validation workflows must explicitly check out the exact head")
     return errors
@@ -302,7 +267,6 @@ def main() -> int:
         errors.extend(check_display_config_contract())
         errors.extend(check_removed_managed_bsp_display_symbols())
         errors.extend(check_example12_lvgl_contract())
-        errors.extend(check_example12_lvgl8_managed_bsp_shim())
         errors.extend(check_workflows())
     for error in errors:
         print(f"policy: {error}", file=sys.stderr)
