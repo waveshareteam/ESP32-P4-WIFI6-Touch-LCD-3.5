@@ -43,9 +43,12 @@ class ClassifyChangesTests(unittest.TestCase):
         self.assertEqual(pull_request_template["esp_idf"]["mode"], "none")
         self.assertTrue(pull_request_template["scope"]["docs_only"])
 
-        gitignore = self.report("M\t.gitignore")
-        self.assertEqual(gitignore["esp_idf"]["mode"], "none")
-        self.assertTrue(gitignore["scope"]["docs_only"])
+        for ignored_root_file in (".gitattributes", ".gitignore"):
+            with self.subTest(ignored_root_file=ignored_root_file):
+                ignored = self.report(f"M\t{ignored_root_file}")
+                self.assertEqual(ignored["esp_idf"]["mode"], "none")
+                self.assertTrue(ignored["scope"]["docs_only"])
+                self.assertEqual(ignored["unknown_paths"], [])
 
     def test_documentation_policy_configs_select_no_builds(self) -> None:
         for changed_path in (

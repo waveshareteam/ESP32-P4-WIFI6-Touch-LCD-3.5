@@ -44,6 +44,7 @@ DOCUMENT_ASSET_EXTENSIONS = {
 }
 DELIVERY_EXTENSIONS = {".bin", ".zip"}
 ROOT_DOCUMENT_NAMES = {
+    ".gitattributes",
     ".gitignore",
     "CODE_OF_CONDUCT.md",
     "CONTRIBUTING.md",
