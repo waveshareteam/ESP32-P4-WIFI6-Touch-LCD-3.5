@@ -4,7 +4,6 @@
 // Project name: esp32_p4_eye_factory
 
 #include "../ui.h"
-#include "esp_err.h"
 #include "bsp/display.h"
 
 #define UI_BASE_SIZE 240

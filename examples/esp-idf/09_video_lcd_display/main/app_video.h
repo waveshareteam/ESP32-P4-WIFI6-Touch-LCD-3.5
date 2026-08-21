@@ -25,7 +25,7 @@ typedef enum {
     APP_VIDEO_FMT_YUV420 = V4L2_PIX_FMT_YUV420,
 } video_fmt_t;
 
-/* Official BSP 2.0.1 fixes the display contract to RGB565. */
+/* The managed BSP fixes the display contract to RGB565. */
 #define APP_VIDEO_FMT              (APP_VIDEO_FMT_RGB565)
 
 typedef void (*app_video_frame_operation_cb_t)(uint8_t *camera_buf, uint8_t camera_buf_index, uint32_t camera_buf_hes, uint32_t camera_buf_ves, size_t camera_buf_len, void *user_data);
