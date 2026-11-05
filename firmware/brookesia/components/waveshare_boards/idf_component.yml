@@ -1,4 +1,0 @@
-version: 0.1.0
-description: Waveshare board definitions for ESP Board Manager
-dependencies:
-  espressif/esp_board_manager: ^0.7.5

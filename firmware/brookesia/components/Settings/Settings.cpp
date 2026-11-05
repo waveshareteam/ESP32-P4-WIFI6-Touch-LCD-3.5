@@ -96,11 +96,6 @@ namespace esp_brookesia::apps
         destroy_settings_ui();
         lv_obj_clean(lv_scr_act());
 
-        // On the first run the core only moves the screen to the visual area after run() returns.
-        // Move it now so the round layout measures the screen where it will be shown.
-        const lv_area_t &visual_area = getVisualArea();
-        lv_obj_set_pos(lv_scr_act(), visual_area.x1, visual_area.y1);
-
         page_root = settings_ui::create_page(lv_scr_act(), getContentTopInset());
         settings_ui::create_header(page_root, "Settings");
         settings_ui::init_list_styles(style_list, style_list_btn, style_list_text, style_list_btn_pressed);

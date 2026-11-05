@@ -85,11 +85,6 @@ CONFIG_LV_FONT_MONTSERRAT_20=y
 CONFIG_LV_FONT_FMT_TXT_LARGE=y
 CONFIG_LV_USE_FONT_COMPRESSED=y
 
-# The ST7796 panel is rectangular; skip the round-display layouts of the apps.
-CONFIG_SETTINGS_UI_ROUND_DISPLAY=n
-CONFIG_XIAOZHI_APP_ROUND_DISPLAY=n
-CONFIG_BROOKESIA_APP_CALCULATOR_ROUND_DISPLAY=n
-
 # ESP-Brookesia and Boost
 CONFIG_ESP_BROOKESIA_ENABLE_AI_FRAMEWORK=n
 CONFIG_ESP_BROOKESIA_GUI_ENABLE_ANIM_PLAYER=n
@@ -97,8 +92,15 @@ CONFIG_ESP_BROOKESIA_SYSTEMS_ENABLE_SPEAKER=n
 CONFIG_ESP_BROOKESIA_ENABLE_SERVICES=y
 CONFIG_BOOST_THREAD_ENABLED=y
 
+# ---------------------------------------------------------------------------
 # Xiaozhi
-# Wake word: "Ni Hao Xiao Zhi" (WakeNet 9).
+# ---------------------------------------------------------------------------
+# Xiaozhi wake word: "Ni Hao Xiao Zhi" (WakeNet 9).
 CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS=y
+
+# Xiaozhi-owned status and activation fallback text. Server text is unchanged.
+CONFIG_XIAOZHI_APP_UI_LANGUAGE_ENGLISH=y
+CONFIG_XIAOZHI_APP_TRANSPORT_AUTO=y
+
 # Keep synchronous service requests within the app lifecycle wait window.
 CONFIG_XIAOZHI_INFO_TIMEOUT_MS=8000

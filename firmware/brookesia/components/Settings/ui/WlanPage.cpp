@@ -75,16 +75,13 @@ namespace esp_brookesia::apps
             dst[len] = '\0';
         }
 
-        // Password form layout on the round panel.
-        constexpr lv_coord_t PASSWORD_TITLE_HEIGHT = 22;
+        // Password form layout.
         constexpr lv_coord_t PASSWORD_TITLE_GAP = 30;
         constexpr lv_coord_t PASSWORD_TA_HEIGHT = 44;
         constexpr lv_coord_t PASSWORD_FORM_GAP = 10;
-        constexpr lv_coord_t KB_PAD = 8;
-        constexpr lv_coord_t KB_GAP = 6;
-        constexpr int KB_ROWS = 4;
-        constexpr int32_t KB_MIN_ROW_WEIGHT = 24;
-        constexpr uint32_t KB_WIDTH_MASK = 0x000F;
+        constexpr lv_coord_t PASSWORD_FORM_SIDE_MARGIN = 16;
+        constexpr lv_coord_t KB_PAD = 2;
+        constexpr lv_coord_t KB_GAP = 2;
         const uint32_t KB_FLAGS = LV_KEYBOARD_CTRL_BUTTON_FLAGS;
         constexpr uint32_t KB_CHECKED = LV_BUTTONMATRIX_CTRL_CHECKED;
         constexpr uint32_t KB_KEY = LV_BUTTONMATRIX_CTRL_POPOVER;
@@ -95,36 +92,9 @@ namespace esp_brookesia::apps
         };
         using KbLayout = std::vector<std::vector<KbKey>>;
 
-        // Same layouts as LVGL's default text keyboards (lv_keyboard.c). The mode-switch labels
-        // ("abc", "ABC", "1#") must match LV_KEYBOARD_CTRL_BUTTON_MODE_* there.
-        const KbLayout &kb_layout(lv_keyboard_mode_t mode)
+        // Symbol page of LVGL's default text keyboard (lv_keyboard.c); compact_kb_layout() extends it.
+        const KbLayout &special_kb_layout()
         {
-            static const KbLayout lower = {
-                {{"1#", KB_FLAGS | 5}, {"q", KB_KEY | 4}, {"w", KB_KEY | 4}, {"e", KB_KEY | 4}, {"r", KB_KEY | 4},
-                 {"t", KB_KEY | 4}, {"y", KB_KEY | 4}, {"u", KB_KEY | 4}, {"i", KB_KEY | 4}, {"o", KB_KEY | 4},
-                 {"p", KB_KEY | 4}, {LV_SYMBOL_BACKSPACE, KB_CHECKED | 7}},
-                {{"ABC", KB_FLAGS | 6}, {"a", KB_KEY | 3}, {"s", KB_KEY | 3}, {"d", KB_KEY | 3}, {"f", KB_KEY | 3},
-                 {"g", KB_KEY | 3}, {"h", KB_KEY | 3}, {"j", KB_KEY | 3}, {"k", KB_KEY | 3}, {"l", KB_KEY | 3},
-                 {LV_SYMBOL_NEW_LINE, KB_CHECKED | 7}},
-                {{"_", KB_CHECKED | KB_KEY | 1}, {"-", KB_CHECKED | KB_KEY | 1}, {"z", KB_KEY | 1}, {"x", KB_KEY | 1},
-                 {"c", KB_KEY | 1}, {"v", KB_KEY | 1}, {"b", KB_KEY | 1}, {"n", KB_KEY | 1}, {"m", KB_KEY | 1},
-                 {".", KB_CHECKED | KB_KEY | 1}, {",", KB_CHECKED | KB_KEY | 1}, {":", KB_CHECKED | KB_KEY | 1}},
-                {{LV_SYMBOL_KEYBOARD, KB_FLAGS | 2}, {LV_SYMBOL_LEFT, KB_CHECKED | 2}, {" ", 6},
-                 {LV_SYMBOL_RIGHT, KB_CHECKED | 2}, {LV_SYMBOL_OK, KB_FLAGS | 2}},
-            };
-            static const KbLayout upper = {
-                {{"1#", KB_FLAGS | 5}, {"Q", KB_KEY | 4}, {"W", KB_KEY | 4}, {"E", KB_KEY | 4}, {"R", KB_KEY | 4},
-                 {"T", KB_KEY | 4}, {"Y", KB_KEY | 4}, {"U", KB_KEY | 4}, {"I", KB_KEY | 4}, {"O", KB_KEY | 4},
-                 {"P", KB_KEY | 4}, {LV_SYMBOL_BACKSPACE, KB_CHECKED | 7}},
-                {{"abc", KB_FLAGS | 6}, {"A", KB_KEY | 3}, {"S", KB_KEY | 3}, {"D", KB_KEY | 3}, {"F", KB_KEY | 3},
-                 {"G", KB_KEY | 3}, {"H", KB_KEY | 3}, {"J", KB_KEY | 3}, {"K", KB_KEY | 3}, {"L", KB_KEY | 3},
-                 {LV_SYMBOL_NEW_LINE, KB_CHECKED | 7}},
-                {{"_", KB_CHECKED | KB_KEY | 1}, {"-", KB_CHECKED | KB_KEY | 1}, {"Z", KB_KEY | 1}, {"X", KB_KEY | 1},
-                 {"C", KB_KEY | 1}, {"V", KB_KEY | 1}, {"B", KB_KEY | 1}, {"N", KB_KEY | 1}, {"M", KB_KEY | 1},
-                 {".", KB_CHECKED | KB_KEY | 1}, {",", KB_CHECKED | KB_KEY | 1}, {":", KB_CHECKED | KB_KEY | 1}},
-                {{LV_SYMBOL_CLOSE, KB_FLAGS | 2}, {LV_SYMBOL_LEFT, KB_CHECKED | 2}, {" ", 6},
-                 {LV_SYMBOL_RIGHT, KB_CHECKED | 2}, {LV_SYMBOL_OK, KB_FLAGS | 2}},
-            };
             static const KbLayout special = {
                 {{"1", KB_KEY | 1}, {"2", KB_KEY | 1}, {"3", KB_KEY | 1}, {"4", KB_KEY | 1}, {"5", KB_KEY | 1},
                  {"6", KB_KEY | 1}, {"7", KB_KEY | 1}, {"8", KB_KEY | 1}, {"9", KB_KEY | 1}, {"0", KB_KEY | 1},
@@ -138,17 +108,10 @@ namespace esp_brookesia::apps
                 {{LV_SYMBOL_KEYBOARD, KB_FLAGS | 2}, {LV_SYMBOL_LEFT, KB_CHECKED | 2}, {" ", 6},
                  {LV_SYMBOL_RIGHT, KB_CHECKED | 2}, {LV_SYMBOL_OK, KB_FLAGS | 2}},
             };
-            switch (mode) {
-            case LV_KEYBOARD_MODE_TEXT_UPPER:
-                return upper;
-            case LV_KEYBOARD_MODE_SPECIAL:
-                return special;
-            default:
-                return lower;
-            }
+            return special;
         }
 
-        // Compact QWERTY rows leave more room per key on narrow rectangular screens.
+        // Compact QWERTY rows leave more room per key on narrow screens.
         const KbLayout &compact_kb_layout(lv_keyboard_mode_t mode)
         {
             static const KbLayout lower = {
@@ -164,7 +127,7 @@ namespace esp_brookesia::apps
                 {{"1#", KB_FLAGS | 2}, {LV_SYMBOL_CLOSE, KB_FLAGS | 2}, {" ", 6}, {".", KB_KEY | 1}, {LV_SYMBOL_OK, KB_FLAGS | 2}},
             };
             static const KbLayout special = [] {
-                KbLayout layout = kb_layout(LV_KEYBOARD_MODE_SPECIAL);
+                KbLayout layout = special_kb_layout();
                 layout[3].insert(layout[3].begin() + 1, {",", KB_KEY | 1});
                 layout[3].insert(layout[3].begin() + 2, {":", KB_KEY | 1});
                 layout[3].insert(layout[3].begin() + 3, {"_", KB_KEY | 1});
@@ -208,50 +171,16 @@ namespace esp_brookesia::apps
             }
         }
 
-        // Builds a keyboard map whose rows are narrowed by hidden spacer buttons at both ends, so
-        // each row stays inside row_widths[i] of the full_width keyboard content area.
-        void build_round_kb_map(const KbLayout &layout, const lv_coord_t *row_widths, lv_coord_t full_width, lv_coord_t gap,
-                                std::vector<const char *> &map, std::vector<lv_buttonmatrix_ctrl_t> &ctrl)
+        // Flattens a keyboard layout into the map and control arrays lv_keyboard_set_map() expects.
+        void build_kb_map(const KbLayout &layout, std::vector<const char *> &map,
+                          std::vector<lv_buttonmatrix_ctrl_t> &ctrl)
         {
             map.clear();
             ctrl.clear();
             for (size_t i = 0; i < layout.size(); ++i) {
-                const auto &row = layout[i];
-                int32_t max_weight = 1;
-                int32_t row_weight = 0;
-                for (const auto &key : row) {
-                    const int32_t weight = static_cast<int32_t>(key.ctrl & KB_WIDTH_MASK);
-                    max_weight = LV_MAX(max_weight, weight);
-                    row_weight += weight;
-                }
-                // Scale light rows up so the spacer weight has finer steps.
-                const int32_t scale = LV_MAX(1, LV_MIN(15 / max_weight,
-                                                       (KB_MIN_ROW_WEIGHT + row_weight - 1) / row_weight));
-                row_weight *= scale;
-
-                // With spacer weight s on each side the keys get
-                // (full - (n + 1) * gap) * W / (W + 2s) + (n - 1) * gap pixels; solve for s, rounding up.
-                const int32_t keys = static_cast<int32_t>(row.size());
-                const int32_t key_px = row_widths[i] - (keys - 1) * gap;
-                const int32_t avail = full_width - (keys + 1) * gap;
-                int32_t spacer = 0;
-                if (row_widths[i] < full_width && key_px > 0 && avail > key_px) {
-                    spacer = (row_weight * (avail - key_px) + 2 * key_px - 1) / (2 * key_px);
-                    spacer = LV_MIN(spacer, 15);
-                }
-
-                if (spacer > 0) {
-                    map.push_back(" ");
-                    ctrl.push_back(static_cast<lv_buttonmatrix_ctrl_t>(LV_BUTTONMATRIX_CTRL_HIDDEN | spacer));
-                }
-                for (const auto &key : row) {
+                for (const auto &key : layout[i]) {
                     map.push_back(key.text);
-                    ctrl.push_back(static_cast<lv_buttonmatrix_ctrl_t>((key.ctrl & ~KB_WIDTH_MASK) |
-                                                                         ((key.ctrl & KB_WIDTH_MASK) * scale)));
-                }
-                if (spacer > 0) {
-                    map.push_back(" ");
-                    ctrl.push_back(static_cast<lv_buttonmatrix_ctrl_t>(LV_BUTTONMATRIX_CTRL_HIDDEN | spacer));
+                    ctrl.push_back(static_cast<lv_buttonmatrix_ctrl_t>(key.ctrl));
                 }
                 map.push_back((i + 1 < layout.size()) ? "\n" : "");
             }
@@ -365,7 +294,7 @@ namespace esp_brookesia::apps
         if (header != nullptr) {
             refresh_btn = lv_button_create(header);
             lv_obj_set_size(refresh_btn, settings_ui::HEADER_BUTTON_SIZE, settings_ui::HEADER_BUTTON_SIZE);
-            lv_obj_align(refresh_btn, LV_ALIGN_RIGHT_MID, -settings_ui::header_button_inset(page_root), 0);
+            lv_obj_align(refresh_btn, LV_ALIGN_RIGHT_MID, -settings_ui::HEADER_BUTTON_EDGE_MARGIN, 0);
             lv_obj_set_style_radius(refresh_btn, 8, LV_PART_MAIN);
             lv_obj_set_style_border_width(refresh_btn, 0, LV_PART_MAIN);
             lv_obj_set_style_shadow_width(refresh_btn, 0, LV_PART_MAIN);
@@ -400,33 +329,20 @@ namespace esp_brookesia::apps
         lv_obj_remove_flag(wlan_btn, LV_OBJ_FLAG_CLICKABLE);
 
         lv_obj_update_layout(page_root);
-        lv_coord_t content_width = lv_obj_get_width(page_root) - settings_ui::PAGE_HORIZONTAL_MARGIN * 2;
-        lv_coord_t keyboard_height = lv_obj_get_height(page_root) * 38 / 100;
-        if (keyboard_height > 420) {
-            keyboard_height = 420;
-        } else if (keyboard_height < 260) {
-            keyboard_height = 260;
-        }
-        if (content_width < 1) {
-            content_width = 1;
-        }
+        const lv_coord_t content_width = LV_MAX(
+            static_cast<lv_coord_t>(1), lv_obj_get_width(page_root) - settings_ui::PAGE_HORIZONTAL_MARGIN * 2);
 
-        // The round panel is too narrow near the bottom for a full keyboard, so the password form
-        // sits around the screen centre and every element is clipped to its visible chord.
+        // The password form sits around the screen centre, below the header.
         lv_area_t page_area;
         lv_obj_get_coords(page_root, &page_area);
         int32_t panel_hor = 0;
         int32_t panel_ver = 0;
         settings_ui::get_panel_size(page_root, panel_hor, panel_ver);
-        const bool compact_keyboard = !settings_ui::ROUND_DISPLAY || panel_hor != panel_ver;
-        if (compact_keyboard) {
-            const lv_coord_t available = lv_obj_get_height(page_root) - settings_ui::PAGE_HEADER_HEIGHT - 16 -
-                                         PASSWORD_TITLE_GAP - PASSWORD_TA_HEIGHT - PASSWORD_FORM_GAP;
-            keyboard_height = LV_MIN(static_cast<lv_coord_t>(290), LV_MAX(static_cast<lv_coord_t>(1), available));
-        }
-        const lv_coord_t kb_pad = compact_keyboard ? 2 : KB_PAD;
-        const lv_coord_t kb_gap = compact_keyboard ? 2 : KB_GAP;
-        const lv_coord_t kb_width = compact_keyboard ? lv_obj_get_width(page_root) : content_width;
+        const lv_coord_t available = lv_obj_get_height(page_root) - settings_ui::PAGE_HEADER_HEIGHT - 16 -
+                                     PASSWORD_TITLE_GAP - PASSWORD_TA_HEIGHT - PASSWORD_FORM_GAP;
+        const lv_coord_t keyboard_height =
+            LV_MIN(static_cast<lv_coord_t>(290), LV_MAX(static_cast<lv_coord_t>(1), available));
+        const lv_coord_t kb_width = lv_obj_get_width(page_root);
         const lv_coord_t screen_mid = panel_ver / 2;
         lv_coord_t kb_top = screen_mid - keyboard_height / 4;
         lv_coord_t ta_top = kb_top - PASSWORD_FORM_GAP - PASSWORD_TA_HEIGHT;
@@ -438,25 +354,22 @@ namespace esp_brookesia::apps
             ta_top += shift;
             title_top += shift;
         }
-        auto fit_width = [&](lv_coord_t top, lv_coord_t height) {
-            const lv_coord_t width =
-                2 * (settings_ui::round_screen_half_width(page_root, top, top + height) - settings_ui::ROUND_EDGE_MARGIN);
-            return LV_MAX(static_cast<lv_coord_t>(1), LV_MIN(width, content_width));
-        };
+        const lv_coord_t form_width = LV_MAX(
+            static_cast<lv_coord_t>(1), LV_MIN(2 * (panel_hor / 2 - PASSWORD_FORM_SIDE_MARGIN), content_width));
 
         password_title = lv_label_create(page_root);
         lv_label_set_text(password_title, "Connect to network");
         lv_label_set_long_mode(password_title, LV_LABEL_LONG_MODE_DOTS);
-        lv_obj_set_width(password_title, fit_width(title_top, PASSWORD_TITLE_HEIGHT));
+        lv_obj_set_width(password_title, form_width);
         lv_obj_set_style_text_font(password_title, &lv_font_montserrat_16, LV_PART_MAIN);
         lv_obj_set_style_text_color(password_title, lv_color_hex(settings_ui::COLOR_PRIMARY_TEXT), LV_PART_MAIN);
-        lv_obj_set_style_text_align(password_title, compact_keyboard ? LV_TEXT_ALIGN_LEFT : LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+        lv_obj_set_style_text_align(password_title, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN);
         lv_obj_align(password_title, LV_ALIGN_TOP_MID, 0, title_top - page_area.y1);
         lv_obj_add_flag(password_title, LV_OBJ_FLAG_HIDDEN);
 
         ta = lv_textarea_create(page_root);
         lv_obj_add_flag(ta, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_set_size(ta, fit_width(ta_top, PASSWORD_TA_HEIGHT), PASSWORD_TA_HEIGHT);
+        lv_obj_set_size(ta, form_width, PASSWORD_TA_HEIGHT);
         lv_obj_align(ta, LV_ALIGN_TOP_MID, 0, ta_top - page_area.y1);
 
         lv_textarea_set_one_line(ta, true);
@@ -480,34 +393,24 @@ namespace esp_brookesia::apps
         lv_obj_add_flag(kb, LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_size(kb, kb_width, keyboard_height);
         lv_obj_align(kb, LV_ALIGN_TOP_MID, 0, kb_top - page_area.y1);
-        lv_obj_set_style_pad_all(kb, kb_pad, LV_PART_MAIN);
-        lv_obj_set_style_pad_row(kb, kb_gap, LV_PART_MAIN);
-        lv_obj_set_style_pad_column(kb, kb_gap, LV_PART_MAIN);
-        // A rectangular background would show clipped corners on the round panel; only keys are drawn.
+        lv_obj_set_style_pad_all(kb, KB_PAD, LV_PART_MAIN);
+        lv_obj_set_style_pad_row(kb, KB_GAP, LV_PART_MAIN);
+        lv_obj_set_style_pad_column(kb, KB_GAP, LV_PART_MAIN);
+        // Only the keys are drawn; the keyboard has no background of its own.
         lv_obj_set_style_bg_opa(kb, LV_OPA_TRANSP, LV_PART_MAIN);
         lv_obj_set_style_border_width(kb, 0, LV_PART_MAIN);
 
-        const lv_coord_t kb_inner_width = kb_width - kb_pad * 2;
-        const lv_coord_t kb_row_height = (keyboard_height - kb_pad * 2 - kb_gap * (KB_ROWS - 1)) / KB_ROWS;
-        lv_coord_t kb_row_widths[KB_ROWS];
-        for (int i = 0; i < KB_ROWS; ++i) {
-            const lv_coord_t row_top = kb_top + kb_pad + i * (kb_row_height + kb_gap);
-            kb_row_widths[i] = compact_keyboard ? kb_inner_width : LV_MIN(fit_width(row_top, kb_row_height), kb_inner_width);
-        }
         const lv_keyboard_mode_t kb_modes[KB_MAP_COUNT] = {
             LV_KEYBOARD_MODE_TEXT_LOWER, LV_KEYBOARD_MODE_TEXT_UPPER, LV_KEYBOARD_MODE_SPECIAL,
         };
         for (size_t i = 0; i < KB_MAP_COUNT; ++i) {
-            build_round_kb_map(compact_keyboard ? compact_kb_layout(kb_modes[i]) : kb_layout(kb_modes[i]),
-                               kb_row_widths, kb_inner_width, kb_gap, kb_map[i], kb_ctrl[i]);
+            build_kb_map(compact_kb_layout(kb_modes[i]), kb_map[i], kb_ctrl[i]);
             lv_keyboard_set_map(kb, kb_modes[i], kb_map[i].data(), kb_ctrl[i].data());
         }
         lv_keyboard_set_mode(kb, LV_KEYBOARD_MODE_TEXT_LOWER);
         lv_keyboard_set_popovers(kb, true);
-        if (compact_keyboard) {
-            lv_obj_remove_event_cb(kb, lv_keyboard_def_event_cb);
-            lv_obj_add_event_cb(kb, compact_keyboard_event_cb, LV_EVENT_VALUE_CHANGED, nullptr);
-        }
+        lv_obj_remove_event_cb(kb, lv_keyboard_def_event_cb);
+        lv_obj_add_event_cb(kb, compact_keyboard_event_cb, LV_EVENT_VALUE_CHANGED, nullptr);
         lv_obj_set_style_bg_color(kb, lv_color_hex(0x333333), LV_PART_ITEMS);
         lv_obj_set_style_text_color(kb, lv_color_hex(settings_ui::COLOR_PRIMARY_TEXT), LV_PART_ITEMS);
         lv_obj_set_style_text_font(kb, &lv_font_montserrat_16, LV_PART_ITEMS);

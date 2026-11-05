@@ -22,6 +22,8 @@ namespace esp_brookesia::apps {
 namespace {
 
 constexpr char TAG[] = "XiaozhiClient";
+// Session esp_mcp files requests under when esp_xiaozhi handles them with a NULL request context.
+constexpr char MCP_DEFAULT_SESSION[] = "__default";
 
 } // namespace
 
@@ -164,6 +166,14 @@ public:
         }
         if (_channel_open.load()) {
             return ESP_OK;
+        }
+
+        // Every audio session restarts the server's JSON-RPC ids at 1, and the engine rejects an id
+        // it has already seen. Forget them here or initialize fails and tools/list never follows.
+        // This keeps the registered tools. The next initialize arrives only after hello below.
+        esp_err_t clear_ret = esp_mcp_clear_session_state(_mcp, MCP_DEFAULT_SESSION);
+        if (clear_ret != ESP_OK) {
+            ESP_LOGW(TAG, "Clear MCP session state failed: %s", esp_err_to_name(clear_ret));
         }
 
         esp_xiaozhi_chat_audio_t audio = {};

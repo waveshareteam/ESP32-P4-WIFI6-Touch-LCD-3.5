@@ -46,7 +46,6 @@ public:
 
 private:
     bool loadTextFont();
-    void applyRoundLayout(int subtitle_height);
     void destroyView();
     void releaseTextFont();
     static const char *emojiForEmotion(const char *emotion);

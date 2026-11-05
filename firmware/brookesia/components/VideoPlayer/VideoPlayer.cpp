@@ -40,6 +40,9 @@ namespace esp_brookesia::apps
 
     namespace {
 
+    // Lines per SPI transfer: 20 KB of internal DMA memory per band on the 320-wide panel.
+    constexpr uint32_t SPI_BAND_LINES = 32;
+
     constexpr uint32_t ceil_div(uint32_t num, uint32_t den)
     {
         return (num + den - 1) / den;
@@ -506,13 +509,20 @@ namespace esp_brookesia::apps
             return ESP_ERR_NOT_SUPPORTED;
         }
 
-        // Playback flips between DPI frame buffers, so it needs at least two of them.
-        ESP_RETURN_ON_FALSE(display_info.frame_buffer_num >= 2, ESP_ERR_NOT_SUPPORTED, ESP_UTILS_LOG_TAG,
-                            "VideoPlayer needs at least two LCD frame buffers, got %u", display_info.frame_buffer_num);
-        // Only the first frame_buffer_num pointers are written.
-        esp_err_t ret = esp_lcd_dpi_panel_get_frame_buffer(display_panel, display_info.frame_buffer_num,
-                                                           &lcd_buffers[0], &lcd_buffers[1], &lcd_buffers[2]);
-        ESP_RETURN_ON_ERROR(ret, ESP_UTILS_LOG_TAG, "Get LCD frame buffers failed");
+        esp_err_t ret = ESP_OK;
+        if (display_info.frame_buffer_num == 0) {
+            ESP_RETURN_ON_ERROR(allocSpiBuffers(), ESP_UTILS_LOG_TAG, "Allocate SPI video buffers failed");
+            lcd_buffer_count = 1;
+        } else {
+            // Playback flips between DPI frame buffers, so it needs at least two of them.
+            ESP_RETURN_ON_FALSE(display_info.frame_buffer_num >= 2, ESP_ERR_NOT_SUPPORTED, ESP_UTILS_LOG_TAG,
+                                "VideoPlayer needs at least two LCD frame buffers, got %u", display_info.frame_buffer_num);
+            // Only the first frame_buffer_num pointers are written.
+            ret = esp_lcd_dpi_panel_get_frame_buffer(display_panel, display_info.frame_buffer_num,
+                                                     &lcd_buffers[0], &lcd_buffers[1], &lcd_buffers[2]);
+            ESP_RETURN_ON_ERROR(ret, ESP_UTILS_LOG_TAG, "Get LCD frame buffers failed");
+            lcd_buffer_count = display_info.frame_buffer_num;
+        }
         current_buf_idx = 0;
 
         if (ppa_srm_handle == nullptr) {
@@ -550,10 +560,10 @@ namespace esp_brookesia::apps
 
         ESP_LOGI(
             ESP_UTILS_LOG_TAG,
-            "Video display bypass: %lux%lu, %u frame buffers",
+            "Video display bypass: %lux%lu, %d frame buffers",
             static_cast<unsigned long>(display_info.width),
             static_cast<unsigned long>(display_info.height),
-            display_info.frame_buffer_num
+            lcd_buffer_count
         );
         return ESP_OK;
     }
@@ -576,11 +586,76 @@ namespace esp_brookesia::apps
         }
 
         memset(lcd_buffers, 0, sizeof(lcd_buffers));
+        lcd_buffer_count = 0;
+        freeSpiBuffers();
         display_panel = nullptr;
         display = nullptr;
         current_buf_idx = 0;
         last_video_width = 0;
         last_video_height = 0;
+    }
+
+    esp_err_t VideoPlayer::allocSpiBuffers()
+    {
+        // sendFrameToSpiPanel() byte-swaps RGB565 only.
+        ESP_RETURN_ON_FALSE(bytes_per_pixel == 2, ESP_ERR_NOT_SUPPORTED, ESP_UTILS_LOG_TAG,
+                            "SPI video playback needs a 16 bpp panel");
+
+        const size_t frame_size = ALIGN_UP(display_info.width * display_info.height * bytes_per_pixel,
+                                           data_cache_line_size);
+        spi_frame = static_cast<uint8_t *>(
+            heap_caps_aligned_calloc(data_cache_line_size, 1, frame_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA));
+        ESP_RETURN_ON_FALSE(spi_frame != nullptr, ESP_ERR_NO_MEM, ESP_UTILS_LOG_TAG, "Allocate SPI frame failed");
+
+        // The panel IO does not DMA from PSRAM, and the SPI driver cannot bounce a whole
+        // frame through internal memory, so the frame goes out in bands.
+        const size_t band_size = ALIGN_UP(display_info.width * SPI_BAND_LINES * bytes_per_pixel,
+                                          data_cache_line_size);
+        for (uint8_t *&band : spi_bands) {
+            band = static_cast<uint8_t *>(
+                heap_caps_aligned_alloc(data_cache_line_size, band_size, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA));
+            ESP_RETURN_ON_FALSE(band != nullptr, ESP_ERR_NO_MEM, ESP_UTILS_LOG_TAG, "Allocate SPI band failed");
+        }
+
+        lcd_buffers[0] = spi_frame;
+        return ESP_OK;
+    }
+
+    void VideoPlayer::freeSpiBuffers()
+    {
+        heap_caps_free(spi_frame);
+        spi_frame = nullptr;
+        for (uint8_t *&band : spi_bands) {
+            heap_caps_free(band);
+            band = nullptr;
+        }
+    }
+
+    esp_err_t VideoPlayer::sendFrameToSpiPanel(const uint8_t *frame)
+    {
+        const uint32_t width = display_info.width;
+        const uint32_t height = display_info.height;
+        const size_t line_size = width * bytes_per_pixel;
+
+        int band_idx = 0;
+        for (uint32_t y = 0; y < height; y += SPI_BAND_LINES) {
+            const uint32_t lines = std::min(SPI_BAND_LINES, height - y);
+            uint8_t *band = spi_bands[band_idx];
+            memcpy(band, frame + y * line_size, lines * line_size);
+            // The panel takes big-endian RGB565; the dummy draw path does not swap it.
+            lv_draw_sw_rgb565_swap(band, width * lines);
+
+            // Each blit first waits for the previous band, so the other band is free to
+            // refill once this returns. Only the last band has no later blit to wait for it.
+            const bool last_band = y + lines == height;
+            ESP_RETURN_ON_ERROR(
+                esp_lv_adapter_dummy_draw_blit(display, 0, y, width, y + lines, band, last_band),
+                ESP_UTILS_LOG_TAG,
+                "Blit SPI band failed"
+            );
+            band_idx ^= 1;
+        }
+        return ESP_OK;
     }
 
     esp_err_t VideoPlayer::initJpegDecoder()
@@ -885,7 +960,7 @@ namespace esp_brookesia::apps
         s_stats.last_frame_us = frame_start_us;
         const uint32_t display_w = display_info.width;
         const uint32_t display_h = display_info.height;
-        const int next_buf_idx = (current_buf_idx + 1) % display_info.frame_buffer_num;
+        const int next_buf_idx = (current_buf_idx + 1) % lcd_buffer_count;
 
         if (initJpegDecoder() != ESP_OK || !lcd_buffers[next_buf_idx] || !dummy_enabled || !ppa_srm_handle) {
             return;
@@ -935,7 +1010,7 @@ namespace esp_brookesia::apps
         if (last_video_width != frame.width || last_video_height != frame.height) {
             // The PPA never writes the margins, so blank them once in every frame buffer.
             const size_t lcd_buffer_size = static_cast<size_t>(display_w) * display_h * bytes_per_pixel;
-            for (int i = 0; i < display_info.frame_buffer_num; i++) {
+            for (int i = 0; i < lcd_buffer_count; i++) {
                 memset(lcd_buffers[i], 0, lcd_buffer_size);
                 esp_cache_msync(lcd_buffers[i], lcd_buffer_size,
                                 ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
@@ -988,7 +1063,9 @@ namespace esp_brookesia::apps
         const int64_t ppa_end_us = esp_timer_get_time();
         s_stats.ppa.add(ppa_end_us - decode_end_us);
 
-        ret = esp_lv_adapter_dummy_draw_blit(display, 0, 0, display_w, display_h, lcd_buffer, false);
+        ret = spi_frame != nullptr ?
+              sendFrameToSpiPanel(spi_frame) :
+              esp_lv_adapter_dummy_draw_blit(display, 0, 0, display_w, display_h, lcd_buffer, false);
         if (ret != ESP_OK) {
             ESP_LOGE(ESP_UTILS_LOG_TAG, "Dummy draw blit failed: %s", esp_err_to_name(ret));
             return;

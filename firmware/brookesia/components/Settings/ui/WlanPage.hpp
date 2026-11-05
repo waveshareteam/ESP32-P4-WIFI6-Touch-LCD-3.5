@@ -72,7 +72,7 @@ private:
     lv_obj_t *password_title = nullptr;
     lv_obj_t *ta = nullptr;
     lv_obj_t *kb = nullptr;
-    // Keyboard maps narrowed for the round panel; lv_keyboard keeps pointers into them.
+    // Keyboard maps; lv_keyboard keeps pointers into them.
     static constexpr size_t KB_MAP_COUNT = 3;
     std::vector<const char *> kb_map[KB_MAP_COUNT];
     std::vector<lv_buttonmatrix_ctrl_t> kb_ctrl[KB_MAP_COUNT];

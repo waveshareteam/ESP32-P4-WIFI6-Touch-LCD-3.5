@@ -1,5 +1,0 @@
-version: "1.0"
-description: Waveshare 3.4-DSI-TOUCH-C
-apply:
-  - panel.yaml
-  - lcd_mipi_dsi.c

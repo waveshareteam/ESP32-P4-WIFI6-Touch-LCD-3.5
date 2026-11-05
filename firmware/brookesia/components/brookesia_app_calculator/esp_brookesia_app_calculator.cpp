@@ -33,10 +33,6 @@ LV_IMG_DECLARE(img_app_calculator);
 
 #define APP_NAME                "Calculator"
 
-// Adaptation for 360x360 round screen
-#define SCREEN_360_EFFECTIVE_WIDTH  320  // Effective display area for round screen
-#define SCREEN_360_EFFECTIVE_HEIGHT 320
-
 static const char *keyboard_map[] = {
     "C", "/", "x", LV_SYMBOL_BACKSPACE, "\n",
     "7", "8", "9", "-", "\n",
@@ -88,24 +84,6 @@ bool Calculator::run(void)
     ESP_UTILS_LOGD("Run(@0x%p)", this);
     _is_starting = true;
     formula_len = 1;
-    _round_layout = false;
-
-#if CONFIG_BROOKESIA_APP_CALCULATOR_ROUND_DISPLAY
-    // The core may shrink the display resolution to the app's visual area, so the panel is
-    // taken as the larger of the display resolution and the far edge of the screen.
-    lv_obj_t *screen = lv_scr_act();
-    lv_obj_update_layout(screen);
-    lv_area_t screen_area;
-    lv_obj_get_coords(screen, &screen_area);
-    lv_display_t *disp = lv_obj_get_display(screen);
-    const int32_t panel_hor = LV_MAX(lv_display_get_horizontal_resolution(disp), screen_area.x2 + 1);
-    const int32_t panel_ver = LV_MAX(lv_display_get_vertical_resolution(disp), screen_area.y2 + 1);
-    if ((panel_hor == panel_ver) && (panel_hor > 0)) {
-        createRoundLayout(panel_hor, screen_area);
-        _is_starting = false;
-        return true;
-    }
-#endif
 
     createRectLayout();
     _is_starting = false;
@@ -114,23 +92,11 @@ bool Calculator::run(void)
 
 void Calculator::createRectLayout(void)
 {
-    _font_big = LABEL_FONT_BIG;
-    _font_small = LABEL_FONT_SMALL;
-
     auto visual_area = getVisualArea();
     _width = lv_area_get_width(&visual_area);
     _height = lv_area_get_height(&visual_area);
 
-    // Special handling for 360x360 round screen
-    bool is_round_screen = false;
-    int y_offset = 0;  // Vertical offset
-    if (_width == 360 && _height == 360) {
-        // Round screen, use smaller effective area
-        is_round_screen = true;
-        _width = SCREEN_360_EFFECTIVE_WIDTH;
-        _height = SCREEN_360_EFFECTIVE_HEIGHT;
-        y_offset = 20;  // Offset downward by 20 pixels to avoid round top
-    } else if (_width == 0 || _height == 0) {
+    if (_width == 0 || _height == 0) {
         _width = 400;
         _height = 600;
     }
@@ -150,12 +116,7 @@ void Calculator::createRectLayout(void)
     lv_obj_set_style_text_font(keyboard, KEYBOARD_FONT, 0);
     lv_obj_set_style_bg_color(keyboard, KEYBOARD_BG_COLOR, 0);
 
-    // Adjust keyboard position, round screen offset upward to avoid bottom occlusion
-    if (is_round_screen) {
-        lv_obj_align(keyboard, LV_ALIGN_BOTTOM_MID, 0, -30);  // Offset upward by 30 pixels
-    } else {
-        lv_obj_align(keyboard, LV_ALIGN_BOTTOM_MID, 0, 0);
-    }
+    lv_obj_align(keyboard, LV_ALIGN_BOTTOM_MID, 0, 0);
 
     lv_obj_add_event_cb(keyboard, keyboard_event_cb, LV_EVENT_ALL, this);
     lv_btnmatrix_set_btn_ctrl(keyboard, 18, LV_BTNMATRIX_CTRL_CHECKED);
@@ -175,12 +136,7 @@ void Calculator::createRectLayout(void)
     lv_obj_t *label_obj = lv_obj_create(lv_scr_act());
     lv_obj_set_size(label_obj, _width, label_h);
 
-    // Adjust label area position, round screen offset downward to avoid top occlusion
-    if (is_round_screen) {
-        lv_obj_align(label_obj, LV_ALIGN_TOP_MID, 0, y_offset);
-    } else {
-        lv_obj_align(label_obj, LV_ALIGN_TOP_MID, 0, 0);
-    }
+    lv_obj_align(label_obj, LV_ALIGN_TOP_MID, 0, 0);
 
     lv_obj_set_style_radius(label_obj, 0, 0);
     lv_obj_set_style_border_width(label_obj, 0, 0);
@@ -197,12 +153,7 @@ void Calculator::createRectLayout(void)
     lv_obj_set_size(history_label, _width, text_h / 3);
     lv_obj_add_flag(history_label, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Round screen uses center alignment to avoid right edge occlusion
-    if (is_round_screen) {
-        lv_obj_set_style_text_align(history_label, LV_TEXT_ALIGN_CENTER, 0);
-    } else {
-        lv_obj_set_style_text_align(history_label, LV_TEXT_ALIGN_RIGHT, 0);
-    }
+    lv_obj_set_style_text_align(history_label, LV_TEXT_ALIGN_RIGHT, 0);
 
     lv_obj_set_style_opa(history_label, LV_OPA_TRANSP, LV_PART_CURSOR);
     lv_obj_set_style_text_color(history_label, LABEL_COLOR, 0);
@@ -219,14 +170,8 @@ void Calculator::createRectLayout(void)
     formula_label = lv_label_create(formula_label_obj);
     lv_obj_set_size(formula_label, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
 
-    // Round screen uses center alignment to avoid right edge occlusion
-    if (is_round_screen) {
-        lv_obj_align(formula_label, LV_ALIGN_CENTER, 0, 0);
-        lv_obj_set_style_text_align(formula_label, LV_TEXT_ALIGN_CENTER, 0);
-    } else {
-        lv_obj_align(formula_label, LV_ALIGN_RIGHT_MID, 0, 0);
-        lv_obj_set_style_text_align(formula_label, LV_TEXT_ALIGN_RIGHT, 0);
-    }
+    lv_obj_align(formula_label, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_set_style_text_align(formula_label, LV_TEXT_ALIGN_RIGHT, 0);
 
     lv_obj_set_style_text_font(formula_label, LABEL_FONT_BIG, 0);
     lv_label_set_text(formula_label, "0");
@@ -241,178 +186,12 @@ void Calculator::createRectLayout(void)
     result_label = lv_label_create(result_label_obj);
     lv_obj_set_size(result_label, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
 
-    // Round screen uses center alignment to avoid right edge occlusion
-    if (is_round_screen) {
-        lv_obj_align(result_label, LV_ALIGN_CENTER, 0, 0);
-        lv_obj_set_style_text_align(result_label, LV_TEXT_ALIGN_CENTER, 0);
-    } else {
-        lv_obj_align(result_label, LV_ALIGN_RIGHT_MID, 0, 0);
-        lv_obj_set_style_text_align(result_label, LV_TEXT_ALIGN_RIGHT, 0);
-    }
+    lv_obj_align(result_label, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_set_style_text_align(result_label, LV_TEXT_ALIGN_RIGHT, 0);
 
     lv_obj_set_style_text_color(result_label, LABEL_COLOR, 0);
     lv_obj_set_style_text_font(result_label, LABEL_FONT_SMALL, 0);
     lv_label_set_text(result_label, "= 0");
-}
-
-namespace {
-
-struct RoundFonts {
-    const lv_font_t *key;
-    const lv_font_t *big;
-    const lv_font_t *small;
-};
-
-RoundFonts pick_round_fonts(int32_t panel_size)
-{
-    // The large sizes exist only where sdkconfig enables them (the 3.5 board enables 12-20 px).
-#if LV_FONT_MONTSERRAT_40 && LV_FONT_MONTSERRAT_36 && LV_FONT_MONTSERRAT_24
-    if (panel_size >= 700) {
-        return {&lv_font_montserrat_40, &lv_font_montserrat_36, &lv_font_montserrat_24};
-    }
-#endif
-#if LV_FONT_MONTSERRAT_30 && LV_FONT_MONTSERRAT_28
-    if (panel_size >= 480) {
-        return {&lv_font_montserrat_30, &lv_font_montserrat_28, &lv_font_montserrat_20};
-    }
-#endif
-    (void)panel_size;
-    return {&lv_font_montserrat_20, &lv_font_montserrat_20, &lv_font_montserrat_16};
-}
-
-// Half of the visible chord for the band [y_top, y_bottom], in panel coordinates.
-int32_t round_half_chord(int32_t radius, int32_t y_top, int32_t y_bottom)
-{
-    const int32_t dy = LV_MIN(LV_MAX(LV_ABS(y_top - radius), LV_ABS(y_bottom - radius)), radius);
-    return lv_sqrt32(static_cast<uint32_t>(radius * radius - dy * dy));
-}
-
-// Whether a round key of diameter key centred at (dx, dy) from the panel centre stays visible.
-bool round_key_fits(int32_t radius, int32_t edge, int32_t dx, int32_t dy, int32_t key)
-{
-    const int32_t limit = radius - edge - key / 2;
-    return (limit > 0) && (dx * dx + dy * dy <= limit * limit);
-}
-
-} // namespace
-
-void Calculator::createRoundLayout(int32_t panel_size, const lv_area_t &screen_area)
-{
-    constexpr int32_t KEY_COLS = 4;
-    constexpr int32_t KEY_ROWS = 5;
-    constexpr int32_t LINE_PAD = 4;
-
-    _round_layout = true;
-    const RoundFonts fonts = pick_round_fonts(panel_size);
-    _font_big = fonts.big;
-    _font_small = fonts.small;
-
-    const int32_t radius = panel_size / 2;
-    const int32_t edge = LV_MAX(4, panel_size * 3 / 100);
-    const int32_t gap = LV_MAX(4, panel_size * 16 / 1000);
-    const int32_t history_h = lv_font_get_line_height(fonts.small) + LINE_PAD;
-    const int32_t line_h = lv_font_get_line_height(fonts.big) + LINE_PAD;
-    const int32_t display_top = panel_size * 7 / 100;
-    const int32_t display_h = history_h + 2 * line_h + 2 * LABEL_PAD;
-    const int32_t keys_top = display_top + display_h + gap;
-
-    // Largest key size for which every key of the grid stays inside the circle.
-    int32_t key = LV_MIN(panel_size * 12 / 100,
-                         (panel_size - edge - keys_top - (KEY_ROWS - 1) * gap) / KEY_ROWS);
-    for (; key > 16; --key) {
-        bool fits = true;
-        for (int32_t row = 0; (row < KEY_ROWS) && fits; ++row) {
-            const int32_t center_y = keys_top + row * (key + gap) + key / 2;
-            for (int32_t col = 0; (col < KEY_COLS) && fits; ++col) {
-                const int32_t center_x = radius - (KEY_COLS * key + (KEY_COLS - 1) * gap) / 2 +
-                                         col * (key + gap) + key / 2;
-                fits = round_key_fits(radius, edge, center_x - radius, center_y - radius, key);
-            }
-        }
-        if (fits) {
-            break;
-        }
-    }
-    const int32_t keys_w = KEY_COLS * key + (KEY_COLS - 1) * gap;
-    const int32_t keys_h = KEY_ROWS * key + (KEY_ROWS - 1) * gap;
-
-    lv_obj_t *screen = lv_scr_act();
-    lv_obj_set_style_bg_color(screen, KEYBOARD_BG_COLOR, 0);
-    lv_obj_clear_flag(screen, LV_OBJ_FLAG_SCROLLABLE);
-
-    // Panel coordinates are absolute; children of the screen are placed relative to it.
-    auto place = [&](lv_obj_t *obj, int32_t panel_y, int32_t width, int32_t height) {
-        lv_obj_set_size(obj, width, height);
-        lv_obj_set_pos(obj, radius - width / 2 - screen_area.x1, panel_y - screen_area.y1);
-    };
-    auto row_width = [&](int32_t panel_y, int32_t height) {
-        return LV_MAX(1, 2 * (round_half_chord(radius, panel_y, panel_y + height) - edge));
-    };
-    auto create_line_box = [&](int32_t panel_y) {
-        lv_obj_t *box = lv_obj_create(screen);
-        lv_obj_remove_style_all(box);
-        lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
-        place(box, panel_y, row_width(panel_y, line_h), line_h);
-        return box;
-    };
-
-    // History, formula and result lines, each as wide as the circle allows at its height.
-    history_label = lv_textarea_create(screen);
-    place(history_label, display_top, row_width(display_top, history_h), history_h);
-    lv_obj_set_style_radius(history_label, 0, 0);
-    lv_obj_set_style_border_width(history_label, 0, 0);
-    lv_obj_set_style_pad_all(history_label, 0, 0);
-    lv_obj_set_style_bg_opa(history_label, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_opa(history_label, LV_OPA_TRANSP, LV_PART_CURSOR);
-    lv_obj_set_style_text_align(history_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(history_label, LABEL_COLOR, 0);
-    lv_obj_set_style_text_font(history_label, fonts.small, 0);
-    lv_textarea_set_text(history_label, "");
-
-    const int32_t formula_y = display_top + history_h + LABEL_PAD;
-    formula_label = lv_label_create(create_line_box(formula_y));
-    lv_obj_set_style_text_align(formula_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_font(formula_label, fonts.big, 0);
-    lv_label_set_text(formula_label, "0");
-    alignRoundLabel(formula_label);
-
-    result_label = lv_label_create(create_line_box(formula_y + line_h + LABEL_PAD));
-    lv_obj_set_style_text_align(result_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(result_label, LABEL_COLOR, 0);
-    lv_obj_set_style_text_font(result_label, fonts.small, 0);
-    lv_label_set_text(result_label, "= 0");
-    alignRoundLabel(result_label);
-
-    // Round keys in a 4 x 5 grid; "0" spans two columns as a pill.
-    keyboard = lv_btnmatrix_create(screen);
-    lv_btnmatrix_set_map(keyboard, keyboard_map);
-    lv_btnmatrix_set_btn_width(keyboard, 16, 2);
-    place(keyboard, keys_top, keys_w, keys_h);
-    lv_obj_set_style_bg_opa(keyboard, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(keyboard, 0, 0);
-    lv_obj_set_style_radius(keyboard, 0, 0);
-    lv_obj_set_style_pad_all(keyboard, 0, 0);
-    lv_obj_set_style_pad_row(keyboard, gap, 0);
-    lv_obj_set_style_pad_column(keyboard, gap, 0);
-    lv_obj_set_style_text_font(keyboard, fonts.key, 0);
-    lv_obj_set_style_radius(keyboard, LV_RADIUS_CIRCLE, KEYBOARD_ITEMS_DEFAULT);
-    lv_obj_set_style_shadow_width(keyboard, 0, KEYBOARD_ITEMS_DEFAULT);
-    lv_obj_set_style_border_width(keyboard, 0, KEYBOARD_ITEMS_DEFAULT);
-    lv_obj_set_style_text_color(keyboard, KEYBOARD_SPECIAL_COLOR, KEYBOARD_ITEMS_DEFAULT);
-    lv_btnmatrix_set_btn_ctrl(keyboard, 18, LV_BTNMATRIX_CTRL_CHECKED);
-    lv_obj_add_event_cb(keyboard, keyboard_event_cb, LV_EVENT_ALL, this);
-}
-
-// Centre a display line while it fits; otherwise keep its end, the latest input, visible.
-void Calculator::alignRoundLabel(lv_obj_t *label)
-{
-    lv_obj_t *box = lv_obj_get_parent(label);
-    lv_obj_update_layout(label);
-    if (lv_obj_get_width(label) > lv_obj_get_content_width(box)) {
-        lv_obj_align(label, LV_ALIGN_RIGHT_MID, 0, 0);
-    } else {
-        lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
-    }
 }
 
 bool Calculator::back(void)
@@ -721,11 +500,6 @@ void Calculator::keyboard_event_cb(lv_event_t *e)
             lv_label_set_text_fmt(app->formula_label, "%s", res_str);
             lv_obj_set_style_text_font(app->formula_label, LABEL_FONT_SMALL, 0);
             app->formula_len = strlen(res_str);
-        }
-
-        if (app->_round_layout) {
-            app->alignRoundLabel(app->formula_label);
-            app->alignRoundLabel(app->result_label);
         }
     }
 }

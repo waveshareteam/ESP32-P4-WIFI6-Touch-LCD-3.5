@@ -39,17 +39,6 @@ constexpr int SUBTITLE_EMOJI_GAP = 12;
 constexpr int ACTIVATION_BOX_HEIGHT = 250;
 constexpr int ACTIVATION_BOX_OFFSET_Y = -18;
 
-#if CONFIG_XIAOZHI_APP_ROUND_DISPLAY
-constexpr bool ROUND_DISPLAY = true;
-#else
-constexpr bool ROUND_DISPLAY = false;
-#endif
-// Round layout: distance kept from the visible edge, and the status bar's top as a
-// percentage of the panel height, where the circle is wide enough for icon and text.
-constexpr int ROUND_EDGE_MARGIN = 24;
-constexpr int ROUND_TOP_BAR_Y_PERCENT = 9;
-constexpr int NETWORK_ICON_GAP = 12;
-
 struct EmotionGlyph {
     const char *name;
     const char *utf8;
@@ -113,38 +102,6 @@ void setHidden(lv_obj_t *object, bool hidden)
     } else {
         lv_obj_remove_flag(object, LV_OBJ_FLAG_HIDDEN);
     }
-}
-
-/*
- * Radius of the round panel. The core may shrink the display resolution to the app's
- * visual area, so the panel is the larger of that resolution and the screen's far edge.
- * Returns false on rectangular panels or when the round layout is disabled.
- */
-bool getRoundPanelRadius(lv_obj_t *object, int32_t &radius)
-{
-    if (!ROUND_DISPLAY) {
-        return false;
-    }
-    lv_display_t *display = lv_obj_get_display(object);
-    lv_obj_t *screen = lv_obj_get_screen(object);
-    lv_obj_update_layout(screen);
-    lv_area_t screen_area;
-    lv_obj_get_coords(screen, &screen_area);
-    const int32_t hor = LV_MAX(lv_display_get_horizontal_resolution(display), screen_area.x2 + 1);
-    const int32_t ver = LV_MAX(lv_display_get_vertical_resolution(display), screen_area.y2 + 1);
-    if (hor != ver || hor <= 0) {
-        return false;
-    }
-    radius = hor / 2;
-    return true;
-}
-
-// Width that stays ROUND_EDGE_MARGIN inside the circle for the band [top, bottom] (screen y).
-int32_t roundBandWidth(int32_t radius, int32_t top, int32_t bottom)
-{
-    const int32_t dy = LV_MIN(LV_MAX(LV_ABS(top - radius), LV_ABS(bottom - radius)), radius);
-    const int32_t half = lv_sqrt32(static_cast<uint32_t>(radius * radius - dy * dy));
-    return LV_MAX(static_cast<int32_t>(1), 2 * (half - ROUND_EDGE_MARGIN));
 }
 
 } // namespace
@@ -299,56 +256,11 @@ bool XiaozhiUi::create(
     lv_obj_set_style_text_font(_subtitle_label, _text_font, LV_PART_MAIN);
     lv_obj_align(_subtitle_label, LV_ALIGN_CENTER, 0, 0);
 
-    applyRoundLayout(subtitle_height);
-
     setNetworkReady(false);
     setStatus("");
     setEmotion("neutral");
     clearChatMessages();
     return true;
-}
-
-void XiaozhiUi::applyRoundLayout(int subtitle_height)
-{
-    int32_t radius = 0;
-    if (!getRoundPanelRadius(_root, radius)) {
-        return;
-    }
-    lv_obj_update_layout(_root);
-    lv_area_t root_area;
-    lv_obj_get_coords(_root, &root_area);
-    const int32_t root_center_y = (root_area.y1 + root_area.y2) / 2;
-
-    // Status bar: move it down to where the circle fits the network icon and the status text,
-    // with the icon at the left end and the text centred between equal side gaps.
-    const int32_t bar_top = 2 * radius * ROUND_TOP_BAR_Y_PERCENT / 100;
-    const int32_t bar_width = roundBandWidth(radius, bar_top, bar_top + TOP_BAR_HEIGHT);
-    lv_obj_set_width(_top_bar, bar_width);
-    lv_obj_align(_top_bar, LV_ALIGN_TOP_MID, 0, bar_top - root_area.y1);
-    lv_obj_align(_network_label, LV_ALIGN_LEFT_MID, 0, 0);
-    // The icon text is set later, so reserve its width from the icon font.
-    const int32_t icon_width = lv_font_get_line_height(&font_awesome_20_4) * 4 / 3;
-    lv_obj_set_width(
-        _status_label,
-        LV_MAX(static_cast<int32_t>(1), bar_width - 2 * (icon_width + NETWORK_ICON_GAP))
-    );
-    lv_obj_align(_status_label, LV_ALIGN_CENTER, 0, 0);
-
-    // Subtitle and activation areas are centred horizontally; narrow them to their band.
-    const int32_t subtitle_top =
-        root_center_y + EMOJI_CENTER_OFFSET_Y + EMOJI_BOX_SIZE / 2 + SUBTITLE_EMOJI_GAP;
-    lv_obj_set_width(
-        _subtitle_bar, roundBandWidth(radius, subtitle_top, subtitle_top + subtitle_height)
-    );
-
-    const int32_t activation_top =
-        root_center_y + ACTIVATION_BOX_OFFSET_Y - ACTIVATION_BOX_HEIGHT / 2;
-    lv_obj_set_width(
-        _activation_box,
-        // The box starts hidden, so take its 88% width from the root instead of reading it back.
-        LV_MIN(lv_area_get_width(&root_area) * 88 / 100,
-               roundBandWidth(radius, activation_top, activation_top + ACTIVATION_BOX_HEIGHT))
-    );
 }
 
 void XiaozhiUi::destroy()

@@ -51,7 +51,12 @@ namespace esp_brookesia::apps
         jpeg_pixel_format_t jpeg_sw_format = JPEG_PIXEL_FORMAT_RGB565_LE;
         jpeg_dec_output_format_t jpeg_hw_format = JPEG_DECODE_OUT_FORMAT_RGB565;
         void *lcd_buffers[BOARD_DISPLAY_MAX_FRAME_BUFFERS] = {};
+        int lcd_buffer_count = 0;
         int current_buf_idx = 0;
+        /* An SPI panel has no host frame buffer: the PPA writes spi_frame, which is then
+         * sent through two internal DMA bands. Null on a DPI panel. */
+        uint8_t *spi_frame = nullptr;
+        uint8_t *spi_bands[2] = {};
         uint8_t *jpeg_output_buffer = nullptr;
         int jpeg_output_buffer_size = 0;
         size_t data_cache_line_size = 64;
@@ -94,6 +99,9 @@ namespace esp_brookesia::apps
         esp_err_t getAviFileList(const char *dir_path);
         esp_err_t initDisplayBypass();
         void deinitDisplayBypass();
+        esp_err_t allocSpiBuffers();
+        void freeSpiBuffers();
+        esp_err_t sendFrameToSpiPanel(const uint8_t *frame);
         esp_err_t initJpegDecoder();
         void deinitJpegDecoder();
         esp_err_t ensureJpegOutputBuffer(int out_len);
