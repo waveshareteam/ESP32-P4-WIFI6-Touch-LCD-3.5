@@ -1,0 +1,10 @@
+dependencies:
+  idf:
+    version: '>=5.5'
+
+  # espressif/esp_wifi_remote:
+  #   version: "1.6.3"
+
+  # espressif/esp_hosted:
+  #   version: "2.12.11"
+  waveshare/waveshare_boards: ^0.2.0
