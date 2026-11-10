@@ -61,6 +61,8 @@ struct CaptureRequest {
     size_t *length;
     esp_err_t ret;
     SemaphoreHandle_t done;
+    Camera::CapturePreview preview;
+    void *context;
 };
 
 struct CoverCropConfig {
@@ -421,6 +423,7 @@ esp_err_t Camera::openVideoDevice()
     // Keep the node's default format: esp_video picks one the ISP outputs directly, so the CSI
     // passes it through. Requesting the panel format instead (VIDIOC_S_FMT) can make the CSI
     // convert colors, which ESP32-P4 below v3.0 does not support; the PPA converts instead.
+    _camera_stride = format.fmt.pix.bytesperline;
     _camera_fmt = format.fmt.pix.pixelformat;
     switch (_camera_fmt) {
     case V4L2_PIX_FMT_RGB565:
@@ -521,14 +524,14 @@ esp_err_t Camera::setupCameraBuffers()
     return ESP_OK;
 }
 
-esp_err_t Camera::captureJpeg(uint8_t **data, size_t *length)
+esp_err_t Camera::captureJpeg(uint8_t **data, size_t *length, CapturePreview preview, void *context)
 {
     if (xPortGetCoreID() == CAMERA_STREAM_CORE) {
-        return captureJpegOnStreamCore(data, length);
+        return captureJpegOnStreamCore(data, length, preview, context);
     }
 
     // Callers such as the Xiaozhi MCP tools may run on the other core; hand the capture over.
-    CaptureRequest request = {this, data, length, ESP_FAIL, xSemaphoreCreateBinary()};
+    CaptureRequest request = {this, data, length, ESP_FAIL, xSemaphoreCreateBinary(), preview, context};
     ESP_RETURN_ON_FALSE(request.done != nullptr, ESP_ERR_NO_MEM, ESP_UTILS_LOG_TAG, "Create capture semaphore failed");
     BaseType_t created = xTaskCreatePinnedToCore(
                              captureTaskEntry,
@@ -548,7 +551,7 @@ esp_err_t Camera::captureJpeg(uint8_t **data, size_t *length)
     return request.ret;
 }
 
-esp_err_t Camera::captureJpegOnStreamCore(uint8_t **data, size_t *length)
+esp_err_t Camera::captureJpegOnStreamCore(uint8_t **data, size_t *length, CapturePreview preview, void *context)
 {
     if (!data || !length) {
         return ESP_ERR_INVALID_ARG;
@@ -602,7 +605,12 @@ esp_err_t Camera::captureJpegOnStreamCore(uint8_t **data, size_t *length)
     // Requeue frames for CAPTURE_WARMUP_MS (and at least CAPTURE_WARMUP_MIN_FRAMES) before keeping one.
     const TickType_t warmup_start = xTaskGetTickCount();
     int dropped_frames = 0;
+
     while (ret == ESP_OK) {
+        if (preview && !preview(nullptr, false, context)) {
+            ret = ESP_ERR_INVALID_STATE;
+            break;
+        }
         frame = {};
         frame.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
         frame.memory = V4L2_MEMORY_USERPTR;
@@ -614,10 +622,29 @@ esp_err_t Camera::captureJpegOnStreamCore(uint8_t **data, size_t *length)
             ret = ESP_ERR_INVALID_STATE;
             break;
         }
-        if (dropped_frames >= CAPTURE_WARMUP_MIN_FRAMES &&
-                xTaskGetTickCount() - warmup_start >= pdMS_TO_TICKS(CAPTURE_WARMUP_MS)) {
-            break;
+        const bool final_frame = dropped_frames >= CAPTURE_WARMUP_MIN_FRAMES &&
+            xTaskGetTickCount() - warmup_start >= pdMS_TO_TICKS(CAPTURE_WARMUP_MS);
+
+        if (preview && final_frame) {
+            // CPU reads the DMA frame only while it is dequeued. The final frame
+            // remains owned here and is passed unchanged to the JPEG encoder.
+            ret = esp_cache_msync(_camera_buffers[frame.index], _camera_buffer_lengths[frame.index],
+                                 ESP_CACHE_MSYNC_FLAG_DIR_M2C);
+            if (ret != ESP_OK) break;
+            CaptureFrame view = {
+                static_cast<const uint8_t *>(_camera_buffers[frame.index]),
+                frame.bytesused ? frame.bytesused : _camera_buffer_size,
+                _camera_width, _camera_height,
+                _camera_stride ? _camera_stride : _camera_width * _camera_bytes_per_pixel,
+                _camera_bytes_per_pixel
+            };
+            if (!preview(&view, final_frame, context)) {
+                ret = ESP_ERR_INVALID_STATE;
+                break;
+            }
+
         }
+        if (final_frame) break;
         frame.m.userptr = (unsigned long)_camera_buffers[frame.index];
         frame.length = _camera_buffer_lengths[frame.index];
         if (ioctl(_video_fd, VIDIOC_QBUF, &frame) != 0) {
@@ -1057,7 +1084,7 @@ void Camera::previewTaskEntry(void *arg)
 void Camera::captureTaskEntry(void *arg)
 {
     auto *request = static_cast<CaptureRequest *>(arg);
-    request->ret = request->camera->captureJpegOnStreamCore(request->data, request->length);
+    request->ret = request->camera->captureJpegOnStreamCore(request->data, request->length, request->preview, request->context);
     xSemaphoreGive(request->done);
     vTaskDelete(nullptr);
 }

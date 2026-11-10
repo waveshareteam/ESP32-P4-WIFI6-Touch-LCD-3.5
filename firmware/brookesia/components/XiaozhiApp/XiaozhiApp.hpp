@@ -44,6 +44,9 @@ protected:
     bool resume() override;
 
 private:
+    // Owned by the control task; hidden-app presses are discarded.
+    uint32_t _boot_button_presses = 0;
+
     enum class State : uint8_t {
         NetworkRequired,
         Preparing,

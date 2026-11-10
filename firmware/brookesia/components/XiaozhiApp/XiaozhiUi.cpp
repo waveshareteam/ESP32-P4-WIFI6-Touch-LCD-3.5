@@ -5,6 +5,7 @@
  */
 
 #include "XiaozhiUi.hpp"
+#include "XiaozhiCameraPreview.hpp"
 
 #include <stdio.h>
 #include <string.h>
@@ -186,6 +187,23 @@ bool XiaozhiUi::create(
     lv_obj_set_style_text_color(_emoji_label, lv_color_hex(0x000000), LV_PART_MAIN);
     lv_obj_center(_emoji_label);
 
+    _camera_image = lv_image_create(_root);
+    lv_obj_set_size(_camera_image, XiaozhiCameraPreview::WIDTH, XiaozhiCameraPreview::HEIGHT);
+    lv_obj_align(_camera_image, LV_ALIGN_TOP_MID, 0, 54);
+    lv_obj_add_flag(_camera_image, LV_OBJ_FLAG_HIDDEN);
+    _camera_note = lv_label_create(_root);
+    lv_obj_set_width(_camera_note, lv_pct(96));
+    lv_label_set_long_mode(_camera_note, LV_LABEL_LONG_MODE_SCROLL_CIRCULAR);
+    lv_obj_set_style_text_align(_camera_note, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(_camera_note, LV_ALIGN_TOP_MID, 0, 204);
+    lv_obj_add_flag(_camera_note, LV_OBJ_FLAG_HIDDEN);
+    if (_action_callback) {
+        lv_obj_add_flag(_camera_image, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(_camera_image, tapCallback, LV_EVENT_CLICKED, this);
+        lv_obj_add_flag(_camera_note, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(_camera_note, tapCallback, LV_EVENT_CLICKED, this);
+    }
+
     _activation_box = lv_obj_create(_root);
     prepareTransparentObject(_activation_box);
     lv_obj_set_size(_activation_box, lv_pct(88), ACTIVATION_BOX_HEIGHT);
@@ -229,6 +247,7 @@ bool XiaozhiUi::create(
     // The reply text sits directly below the emoji.
     const int subtitle_height =
         multiline_subtitle ? SUBTITLE_MULTILINE_HEIGHT : SUBTITLE_SINGLE_HEIGHT;
+    _subtitle_height = subtitle_height;
     _subtitle_bar = lv_obj_create(_root);
     prepareTransparentObject(_subtitle_bar);
     lv_obj_set_size(_subtitle_bar, lv_pct(100), subtitle_height);
@@ -274,6 +293,13 @@ void XiaozhiUi::destroyView()
         lv_obj_delete(_root);
     }
 
+    lv_image_cache_drop(&_camera_descriptor);
+    heap_caps_free(_camera_pixels);
+    _camera_pixels = nullptr;
+    _camera_image = _camera_note = nullptr;
+    _camera_descriptor = {};
+    _camera_revision = UINT32_MAX;
+    _camera_buffer_failed = _camera_visible = false;
     _root = nullptr;
     _top_bar = nullptr;
     _network_label = nullptr;
@@ -290,6 +316,57 @@ void XiaozhiUi::destroyView()
     _activation_state_valid = false;
     _activation_visible = false;
     _emotion_name[0] = '\0';
+}
+
+void XiaozhiUi::refreshCameraPreview()
+{
+    if (!_root) return;
+    auto &preview = xiaozhiCameraPreview();
+    XiaozhiCameraPreview::Snapshot snapshot;
+    if (!preview.read(_camera_revision, _camera_pixels, snapshot)) return;
+    if (snapshot.has_frame && !_camera_pixels) {
+        if (!_camera_buffer_failed) _camera_pixels = static_cast<uint16_t *>(heap_caps_malloc(
+            XiaozhiCameraPreview::BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+        if (!_camera_pixels) {
+            if (!_camera_buffer_failed)
+                ESP_LOGW("xiaozhi_ui", "Photo preview allocation failed; keeping conversation available");
+            _camera_buffer_failed = true;
+        } else {
+            _camera_descriptor.header.magic = LV_IMAGE_HEADER_MAGIC;
+            _camera_descriptor.header.cf = LV_COLOR_FORMAT_RGB565;
+            _camera_descriptor.header.w = XiaozhiCameraPreview::WIDTH;
+            _camera_descriptor.header.h = XiaozhiCameraPreview::HEIGHT;
+            _camera_descriptor.header.stride = XiaozhiCameraPreview::WIDTH * 2;
+            _camera_descriptor.data_size = XiaozhiCameraPreview::BYTES;
+            _camera_descriptor.data = reinterpret_cast<uint8_t *>(_camera_pixels);
+            // A second nonblocking read may be deferred to the next UI tick.
+            if (!preview.read(_camera_revision, _camera_pixels, snapshot)) return;
+        }
+    }
+    using Phase = XiaozhiCameraPreview::Phase;
+    const bool active = snapshot.phase != Phase::Hidden;
+    const bool show_photo = active && !_activation_visible && snapshot.has_frame && _camera_pixels;
+    if (show_photo) {
+        lv_image_cache_drop(&_camera_descriptor);
+        lv_image_set_src(_camera_image, &_camera_descriptor);
+        lv_obj_invalidate(_camera_image);
+    }
+    setHidden(_camera_image, !show_photo);
+    setHidden(_emoji_box, show_photo || _activation_visible);
+    setHidden(_camera_note, true);
+    if (_camera_visible != show_photo) {
+        _camera_visible = show_photo;
+        if (show_photo) lv_obj_align(_subtitle_bar, LV_ALIGN_TOP_MID, 0, 236);
+        else lv_obj_align(_subtitle_bar, LV_ALIGN_CENTER, 0,
+            EMOJI_CENTER_OFFSET_Y + EMOJI_BOX_SIZE / 2 + SUBTITLE_EMOJI_GAP + _subtitle_height / 2);
+    }
+    if (!active && _camera_pixels) {
+        lv_image_set_src(_camera_image, nullptr);
+        lv_image_cache_drop(&_camera_descriptor);
+        heap_caps_free(_camera_pixels); _camera_pixels = nullptr;
+        _camera_descriptor = {};
+    }
+    if (!active) _camera_buffer_failed = false;
 }
 
 void XiaozhiUi::setNetworkReady(bool ready)
@@ -369,7 +446,7 @@ void XiaozhiUi::setActivation(const char *code, const char *message, bool visibl
     setLabelTextIfChanged(_activation_code_label, code);
     setLabelTextIfChanged(_activation_message_label, message);
     if (!_activation_state_valid || _activation_visible != visible) {
-        setHidden(_emoji_box, visible);
+        setHidden(_emoji_box, visible || _camera_visible);
         setHidden(_activation_box, !visible);
         _activation_visible = visible;
         _activation_state_valid = true;

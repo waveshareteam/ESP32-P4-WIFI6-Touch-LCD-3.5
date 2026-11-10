@@ -32,6 +32,7 @@ public:
     );
     void destroy();
 
+    void refreshCameraPreview();
     void setNetworkReady(bool ready);
     void setStatus(const char *status);
     void setChatMessage(const char *role, const char *text);
@@ -65,6 +66,14 @@ private:
     lv_obj_t *_activation_message_label = nullptr;
     lv_obj_t *_subtitle_bar = nullptr;
     lv_obj_t *_subtitle_label = nullptr;
+
+    lv_obj_t *_camera_image = nullptr;
+    lv_obj_t *_camera_note = nullptr;
+    lv_image_dsc_t _camera_descriptor{};
+    uint16_t *_camera_pixels = nullptr;
+    uint32_t _camera_revision = UINT32_MAX;
+    bool _camera_buffer_failed = false, _camera_visible = false;
+    int _subtitle_height = 44;
 
     uint8_t *_font_data = nullptr;
     lv_font_t *_cbin_font = nullptr;

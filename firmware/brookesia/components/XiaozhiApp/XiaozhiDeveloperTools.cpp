@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #include "XiaozhiDeveloperTools.hpp"
+#include "XiaozhiCameraPreview.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -13,6 +14,7 @@
 #include "esp_app_desc.h"
 #include "esp_chip_info.h"
 #include "esp_heap_caps.h"
+#include "esp_log.h"
 #include "esp_idf_version.h"
 #include "esp_mcp_engine.h"
 #include "esp_mcp_tool.h"
@@ -32,6 +34,16 @@ esp_xiaozhi_chat_handle_t camera_chat = 0;
 std::mutex reboot_mutex;
 esp_timer_handle_t reboot_timer = nullptr;
 
+bool showCameraFrame(const Camera::CaptureFrame *frame, bool final_frame, void *context)
+{
+    const uint32_t session = *static_cast<const uint32_t *>(context);
+    auto &preview = xiaozhiCameraPreview();
+    if (!(session & 1U) || preview.session() != session) return false;
+    // Allocation failure only disables the local image, not photo recognition.
+    if (frame) preview.publish(session, *frame, final_frame);
+    return preview.session() == session;
+}
+
 esp_mcp_value_t explainImage(const esp_mcp_property_list_t *properties)
 {
     std::lock_guard<std::mutex> lock(camera_mutex);
@@ -44,8 +56,21 @@ esp_mcp_value_t explainImage(const esp_mcp_property_list_t *properties)
     if (ret != ESP_OK) return esp_mcp_value_create_string("Vision service is not available");
     uint8_t *jpeg = nullptr;
     size_t jpeg_len = 0;
-    ret = Camera::requestInstance()->captureJpeg(&jpeg, &jpeg_len);
-    if (ret != ESP_OK) return esp_mcp_value_create_string("Camera capture failed or camera is busy");
+    auto &preview = xiaozhiCameraPreview();
+    uint32_t session = preview.session();
+    if (!(session & 1U)) return esp_mcp_value_create_string("Camera unavailable: app is hidden");
+    if (!preview.begin(session)) {
+        ESP_LOGW("xiaozhi_camera", "Preview buffer unavailable; photo recognition remains available");
+    }
+    ret = Camera::requestInstance()->captureJpeg(&jpeg, &jpeg_len, showCameraFrame, &session);
+    if (ret != ESP_OK) {
+        preview.setPhase(session, XiaozhiCameraPreview::Phase::Error);
+        return esp_mcp_value_create_string("Camera capture failed or camera is busy");
+    }
+    if (preview.session() != session) {
+        free(jpeg);
+        return esp_mcp_value_create_string("Photo cancelled");
+    }
     esp_xiaozhi_camera_config_t config = {};
     config.explain_url = url;
     config.explain_token = token;
@@ -57,10 +82,16 @@ esp_mcp_value_t explainImage(const esp_mcp_property_list_t *properties)
         esp_xiaozhi_camera_frame_t frame = {};
         frame.data = jpeg;
         frame.len = jpeg_len;
+        preview.setPhase(session, XiaozhiCameraPreview::Phase::Analyzing);
         ret = esp_xiaozhi_camera_explain(camera, &frame, question, response, 4096, nullptr);
     }
     if (camera) esp_xiaozhi_camera_destroy(camera);
     free(jpeg);
+    if (preview.session() != session) {
+        free(response);
+        return esp_mcp_value_create_string("Photo cancelled");
+    }
+    preview.setPhase(session, ret == ESP_OK ? XiaozhiCameraPreview::Phase::Complete : XiaozhiCameraPreview::Phase::Error);
     if (ret != ESP_OK) {
         free(response);
         return esp_mcp_value_create_string("Vision upload failed");

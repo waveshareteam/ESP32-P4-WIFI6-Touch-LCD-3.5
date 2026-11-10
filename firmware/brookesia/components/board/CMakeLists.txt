@@ -1,6 +1,7 @@
 set(SRCS "")
 list(APPEND SRCS
     "src/board_camera.c"
+    "src/board_button.c"
     "src/board_codec.c"
     "src/board_audio.c"
     "src/board_display.c"
@@ -21,7 +22,7 @@ idf_component_register(
     SRCS ${SRCS}
     INCLUDE_DIRS ${INCLUDE_DIRS}
     REQUIRES driver esp_lcd_touch esp_lvgl_adapter esp_board_manager
-    PRIV_REQUIRES esp_timer fatfs esp_psram esp_mm esp_driver_ledc
+    PRIV_REQUIRES button esp_timer fatfs esp_psram esp_mm esp_driver_ledc
 )
 
 target_compile_options(
