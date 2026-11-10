@@ -5,6 +5,7 @@
  */
 
 #include "XiaozhiApp.hpp"
+#include "XiaozhiCameraPreview.hpp"
 #include "XiaozhiActivationClient.hpp"
 #include "XiaozhiActivationPrompt.hpp"
 #include "XiaozhiAudioProcessor.hpp"
@@ -305,6 +306,7 @@ bool XiaozhiApp::run()
     _ready_prompt_played.store(false);
     createUi();
     _visible.store(true);
+    xiaozhiCameraPreview().setEnabled(true);
     updateNetworkState();
     ControlEvent event = {};
     event.type = ControlEventType::AppVisible;
@@ -315,6 +317,7 @@ bool XiaozhiApp::run()
 bool XiaozhiApp::back()
 {
     _visible.store(false);
+    xiaozhiCameraPreview().setEnabled(false);
     if (_activation_prompt) {
         _activation_prompt->cancel();
     }
@@ -333,6 +336,7 @@ bool XiaozhiApp::back()
 bool XiaozhiApp::close()
 {
     _visible.store(false);
+    xiaozhiCameraPreview().setEnabled(false);
     if (_activation_prompt) {
         _activation_prompt->cancel();
     }
@@ -375,6 +379,11 @@ bool XiaozhiApp::init()
         return true;
     }
 
+    const esp_err_t button_ret = board_user_button_init();
+    if (button_ret != ESP_OK) {
+        ESP_UTILS_LOGW("BOOT button unavailable: 0x%x", static_cast<unsigned>(button_ret));
+    }
+    _boot_button_presses = board_user_button_get_press_count();
     _deinit_complete.store(false);
     _shutdown.store(false);
     _activation_phase = ActivationPhase::CheckRequired;
@@ -500,6 +509,7 @@ bool XiaozhiApp::deinit()
     }
 
     _visible.store(false);
+    xiaozhiCameraPreview().setEnabled(false);
     bool was_shutdown = _shutdown.exchange(true);
     if (_activation_prompt) {
         _activation_prompt->cancel();
@@ -608,6 +618,7 @@ bool XiaozhiApp::deinit()
 bool XiaozhiApp::pause()
 {
     _visible.store(false);
+    xiaozhiCameraPreview().setEnabled(false);
     if (_activation_prompt) {
         _activation_prompt->cancel();
     }
@@ -632,6 +643,7 @@ bool XiaozhiApp::resume()
         createUi();
     }
     _visible.store(true);
+    xiaozhiCameraPreview().setEnabled(true);
     if (_ui_timer) {
         lv_timer_resume(_ui_timer);
     }
@@ -707,6 +719,7 @@ void XiaozhiApp::refreshUi()
     memcpy(emotion, _emotion, sizeof(emotion));
     xSemaphoreGive(_state_mutex);
 
+    _ui->refreshCameraPreview();
     State state = _state.load();
     _ui->setNetworkReady(_network_ready.load());
     _ui->setStatus(stateText(state));
@@ -967,6 +980,16 @@ void XiaozhiApp::controlLoop()
                     setState(State::NetworkRequired);
                 }
             }
+            const uint32_t presses = board_user_button_get_press_count();
+            if (presses != _boot_button_presses) {
+                _boot_button_presses = presses;
+                if (_visible.load()) {
+                    ControlEvent button_event = {};
+                    button_event.type = ControlEventType::ActionPressed;
+                    ESP_UTILS_LOGI("BOOT: wake or interrupt conversation");
+                    handleControlEvent(button_event);
+                }
+            }
             prepareIfDue();
             TickType_t uplink_started = _uplink_started_tick.load();
             if (uplink_started != 0 &&
@@ -993,6 +1016,7 @@ void XiaozhiApp::controlLoop()
     }
 
     _visible.store(false);
+    xiaozhiCameraPreview().setEnabled(false);
     stopActivationPrompt();
     setAudioModes(false, false);
     closeChannel(true);
@@ -1059,12 +1083,24 @@ void XiaozhiApp::handleControlEvent(const ControlEvent &event)
         break;
     }
     case ControlEventType::ActionPressed:
+        if (!_visible.load()) break;
+        xiaozhiCameraPreview().dismiss();
         if (_state.load() == State::ActivationRequired) {
             announceActivation(true);
         } else if (_state.load() == State::Ready) {
             startListening(ListenMode::AutoStop);
+        } else if (_state.load() == State::Listening && _listen_mode == ListenMode::Manual) {
+            finishListening();
+        } else if ((_state.load() == State::Speaking || _state.load() == State::Processing) &&
+                   _listen_mode == ListenMode::Manual) {
+            cancelManualConversation();
+        } else if (_state.load() == State::Listening || _state.load() == State::Speaking ||
+                   _state.load() == State::Processing) {
+            // Same Talk/Stop state transitions as C5, shared by BOOT and touch.
+            closeChannel(true);
+            setState(State::Ready);
+            enterReadyAudioMode();
         }
-        // Taps during a turn are ignored; only the wake word interrupts.
         break;
     case ControlEventType::AnnounceActivation:
         announceActivation(true);
@@ -1299,7 +1335,9 @@ void XiaozhiApp::handleControlEvent(const ControlEvent &event)
 
 void XiaozhiApp::handleAppVisible()
 {
+    _boot_button_presses = board_user_button_get_press_count();
     _visible.store(true);
+    xiaozhiCameraPreview().setEnabled(true);
     if (!_network_ready.load() || !isNetworkReady()) {
         setState(State::NetworkRequired);
     } else if (_activation_phase == ActivationPhase::WaitingForBinding ||
@@ -1332,6 +1370,7 @@ void XiaozhiApp::handleAppVisible()
 void XiaozhiApp::handleAppHidden(bool release_audio)
 {
     _visible.store(false);
+    xiaozhiCameraPreview().setEnabled(false);
     stopActivationPrompt();
     setAudioModes(false, false);
     if (release_audio) {
@@ -1563,6 +1602,7 @@ bool XiaozhiApp::prepareChat()
         if (_chat_generation.load() != client_generation) {
             return;
         }
+        xiaozhiCameraPreview().noteSpeech(state == XiaozhiClient::TtsState::Stop);
         (void)text;
         if (state == XiaozhiClient::TtsState::SentenceStart) {
             return;
@@ -2495,6 +2535,7 @@ void XiaozhiApp::cancelManualConversation()
 
 void XiaozhiApp::closeChannel(bool abort_speaking)
 {
+    xiaozhiCameraPreview().dismiss();
     setAudioModes(false, false);
     _accept_playback.store(false);
     _turn_generation.fetch_add(1);
@@ -2524,6 +2565,7 @@ void XiaozhiApp::closeChannel(bool abort_speaking)
 
 void XiaozhiApp::resetChannelState()
 {
+    xiaozhiCameraPreview().dismiss();
     _uplink_ready.store(false);
     _channel_state.store(ChannelState::Closed);
     _accept_playback.store(false);
@@ -2554,6 +2596,7 @@ void XiaozhiApp::handlePlaybackDrained()
         return;
     }
 
+    xiaozhiCameraPreview().finishPlayback();
     _tts_stop_pending.store(false);
     _drain_event_posted.store(false);
     ESP_UTILS_LOGI(
@@ -3301,6 +3344,8 @@ void XiaozhiApp::uiActionCallback(void *context)
         return;
     }
     ControlEvent event = {};
+    xiaozhiCameraPreview().dismiss();
+    if (instance->_ui) instance->_ui->refreshCameraPreview();
     event.type = ControlEventType::ActionPressed;
     instance->postControlEvent(event);
 }

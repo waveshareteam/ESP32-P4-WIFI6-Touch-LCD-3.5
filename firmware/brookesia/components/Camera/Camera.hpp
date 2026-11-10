@@ -19,7 +19,17 @@ namespace esp_brookesia::apps
     {
     public:
         static Camera *requestInstance(bool use_status_bar = false, bool use_navigation_bar = false);
-        esp_err_t captureJpeg(uint8_t **data, size_t *length);
+        // Callback runs on the capture task. Pixels are borrowed until it returns.
+        // A null frame polls cancellation; false cancels capture. Never call LVGL here.
+        struct CaptureFrame {
+            const uint8_t *pixels;
+            size_t size;
+            uint32_t width, height, stride;
+            uint8_t bytes_per_pixel; // native RGB565 or P4 RGB888 (B,G,R bytes)
+        };
+        using CapturePreview = bool (*)(const CaptureFrame *frame, bool final_frame, void *context);
+        esp_err_t captureJpeg(uint8_t **data, size_t *length,
+                              CapturePreview preview = nullptr, void *context = nullptr);
         ~Camera();
 
     protected:
@@ -70,6 +80,7 @@ namespace esp_brookesia::apps
         // The camera keeps the format esp_video picks, so the CSI never converts colors (ESP32-P4
         // below v3.0 cannot); the PPA converts to the panel format and the JPEG encoder takes it as is.
         uint32_t _camera_fmt = 0;
+        uint32_t _camera_stride = 0;
         ppa_srm_color_mode_t _camera_color_mode = PPA_SRM_COLOR_MODE_RGB565;
         jpeg_enc_input_format_t _camera_jpeg_format = JPEG_ENCODE_IN_FORMAT_RGB565;
         uint8_t _camera_bytes_per_pixel = 0;
@@ -111,7 +122,7 @@ namespace esp_brookesia::apps
         bool shouldExitBySwipe();
         esp_err_t handleFrame();
         void previewTask();
-        esp_err_t captureJpegOnStreamCore(uint8_t **data, size_t *length);
+        esp_err_t captureJpegOnStreamCore(uint8_t **data, size_t *length, CapturePreview preview, void *context);
 
         static void previewTaskEntry(void *arg);
         static void captureTaskEntry(void *arg);

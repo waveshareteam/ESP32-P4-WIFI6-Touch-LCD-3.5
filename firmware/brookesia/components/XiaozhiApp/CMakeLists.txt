@@ -10,6 +10,7 @@ set(SRCS_CPP
     "XiaozhiDeveloperTools.cpp"
     "XiaozhiLocalization.cpp"
     "XiaozhiUi.cpp"
+    "XiaozhiCameraPreview.cpp"
     "XiaozhiWebsocketStack.cpp"
     "third_party/xiaozhi_esp32/ogg_demuxer.cc"
 )

@@ -22,6 +22,9 @@ dependencies:
     version: ^0.5.3
     public: true
 
+  espressif/button:
+    version: ^4.2.3
+
   # Co-processor firmware version query; main/idf_component.yml pins the exact release.
   espressif/esp_hosted:
     version: ^1.4.7
